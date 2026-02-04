@@ -2,17 +2,16 @@ import { GoogleGenAI } from "@google/genai";
 import { Question, ChatMessage } from "../types";
 
 /**
- * AI Initialization following strict guidelines.
- * API_KEY is expected to be provided by the Netlify environment.
+ * Initialize the Gemini API using the environment variable.
+ * The API key is injected by Netlify during runtime.
  */
-const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
-};
+const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateStudyHelp = async (query: string, history: ChatMessage[] = []): Promise<string> => {
   try {
-    const ai = getAiClient();
-    const modelName = 'gemini-3-flash-preview';
+    const ai = getAi();
+    // Use gemini-3-flash-preview for fast, chat-based academic assistance
+    const model = 'gemini-3-flash-preview';
     
     const formattedHistory = history.map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
@@ -20,7 +19,7 @@ export const generateStudyHelp = async (query: string, history: ChatMessage[] = 
     }));
 
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: model,
       contents: [
         ...formattedHistory,
         { role: 'user', parts: [{ text: query }] }
@@ -33,17 +32,17 @@ export const generateStudyHelp = async (query: string, history: ChatMessage[] = 
       }
     });
 
-    // Accessing text via property, not method call
-    return response.text || "I couldn't generate a response. Please try again.";
+    // property access .text (not a method)
+    return response.text || "I couldn't generate a response. Please check your connection.";
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return "The AI assistant is currently unavailable. Please check the Netlify environment configuration (API_KEY).";
+    return "The AI service is currently unavailable. Ensure the API_KEY is set in Netlify environment variables.";
   }
 };
 
 export const generateAssessmentQuestions = async (subject: string, semester: number, paperName: string): Promise<Question[]> => {
   try {
-    const ai = getAiClient();
+    const ai = getAi();
     const prompt = `Generate a university-level exam paper for:
     Subject: ${subject}
     Semester: ${semester}
@@ -78,7 +77,7 @@ export const generateAssessmentQuestions = async (subject: string, semester: num
 
 export const evaluateAssessment = async (questions: Question[], answers: Record<number, string>): Promise<{ score: number, total: number, feedback: string }> => {
   try {
-    const ai = getAiClient();
+    const ai = getAi();
     const evaluationPayload = {
       questions: questions,
       studentAnswers: answers
