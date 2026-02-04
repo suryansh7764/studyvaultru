@@ -1,4 +1,4 @@
-
+import { GoogleGenAI } from "@google/genai";
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Sparkles, Loader2, RotateCcw } from 'lucide-react';
 import { generateStudyHelp } from '../services/geminiService';
@@ -15,9 +15,8 @@ const AIChat: React.FC = () => {
         console.error("Failed to parse chat history", e);
       }
     }
-    return [
-      { role: 'model', text: 'Hi! I am your AI study assistant. Ask me about your syllabus, complex topics, or study tips for Ranchi University exams.' }
-    ];
+    // Start with an empty message list to remove the previous greeting prompt
+    return [];
   });
   
   const [input, setInput] = useState('');
@@ -40,13 +39,12 @@ const AIChat: React.FC = () => {
     if (!input.trim() || isLoading) return;
 
     const userMsg: ChatMessage = { role: 'user', text: input };
-    const currentMessages = [...messages];
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
-    // Pass historical context to the AI service
-    const responseText = await generateStudyHelp(input, currentMessages.slice(-6)); // Send last 6 messages for context
+    // Call the service without history context (as per 'remove previous prompt' request)
+    const responseText = await generateStudyHelp(input);
     
     setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     setIsLoading(false);
@@ -54,8 +52,7 @@ const AIChat: React.FC = () => {
 
   const handleClearChat = () => {
     if (window.confirm("Are you sure you want to clear your chat history?")) {
-      const initialMsg: ChatMessage = { role: 'model', text: 'Hi! I am your AI study assistant. Ask me about your syllabus, complex topics, or study tips for Ranchi University exams.' };
-      setMessages([initialMsg]);
+      setMessages([]);
       localStorage.removeItem('ru_chat_history');
     }
   };
@@ -110,6 +107,15 @@ const AIChat: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-slate-950">
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                 <div className="bg-university-accent/10 p-4 rounded-full mb-4">
+                    <Sparkles className="h-8 w-8 text-university-accent" />
+                 </div>
+                 <h4 className="text-gray-900 dark:text-white font-bold mb-2">How can I help you?</h4>
+                 <p className="text-gray-500 dark:text-gray-400 text-xs">Ask me about Ranchi University syllabus, notes, or academic topics.</p>
+              </div>
+            )}
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -158,7 +164,7 @@ const AIChat: React.FC = () => {
               </button>
             </div>
             <div className="text-center mt-2">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">Memory Active • Gemini 3 Flash</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">Standalone Mode • Gemini 3 Flash</span>
             </div>
           </div>
         </div>

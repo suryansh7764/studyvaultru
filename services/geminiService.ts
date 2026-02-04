@@ -7,28 +7,21 @@ import { Question, ChatMessage } from "../types";
  */
 const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const generateStudyHelp = async (query: string, history: ChatMessage[] = []): Promise<string> => {
+export const generateStudyHelp = async (query: string): Promise<string> => {
   try {
     const ai = getAi();
-    // Use gemini-3-flash-preview for fast, chat-based academic assistance
+    // Use gemini-3-flash-preview for fast, standalone academic assistance
     const model = 'gemini-3-flash-preview';
     
-    const formattedHistory = history.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
-
     const response = await ai.models.generateContent({
       model: model,
       contents: [
-        ...formattedHistory,
         { role: 'user', parts: [{ text: query }] }
       ],
       config: {
         systemInstruction: `You are an intelligent academic assistant for students of Ranchi University. 
         Your goal is to help students understand complex topics, summarize notes, or explain concepts from their syllabus. 
-        Be concise, academic, and encouraging. Use formatting like bullet points where helpful.
-        Maintain context of the previous messages in the chat.`,
+        Be concise, academic, and encouraging. Use formatting like bullet points where helpful.`,
       }
     });
 
