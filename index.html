@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudyVault - Ranchi University</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Shim to prevent errors if process is not defined (common in pure browser runs)
+      window.process = window.process || { env: { API_KEY: '' } };
+      
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              serif: ['"DM Serif Display"', 'serif'],
+              sans: ['Outfit', 'sans-serif'],
+            },
+            colors: {
+              university: {
+                900: '#0f172a', // Slate 900 (Deep Navy/Black)
+                800: '#1e293b', // Slate 800
+                accent: '#d97706', // Amber 600 (Gold)
+                light: '#f8fafc', // Slate 50 (Off White)
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Outfit', sans-serif;
+        background-color: #f8fafc;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      .dark body {
+        background-color: #020617;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'DM Serif Display', serif;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      
+      /* Header Gradient Animation */
+      @keyframes gradient-xy {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+      }
+      .animate-gradient-slow {
+          background-size: 200% 200%;
+          animation: gradient-xy 8s ease infinite;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "pdf-lib": "https://esm.sh/pdf-lib@^1.17.1",
+    "idb": "https://esm.sh/idb@^8.0.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
