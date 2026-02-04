@@ -1,73 +1,49 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Question, ChatMessage } from "../types";
 
-// Helper to retrieve API Key from storage or environment
-const getApiKey = (): string => {
-  // Check localStorage first (user-provided key overrides env)
-  const storedKey = localStorage.getItem('ru_api_key');
-  if (storedKey) return storedKey;
-  
-  // Fallback to process.env (safe access via window shim in index.html)
-  // @ts-ignore
-  return (window.process?.env?.API_KEY) || '';
-};
-
-// Helper to initialize the AI client
-const getClient = (): GoogleGenAI | null => {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
-  return new GoogleGenAI({ apiKey });
+/**
+ * AI Initialization following strict guidelines.
+ * API_KEY is expected to be provided by the Netlify environment.
+ */
+const getAiClient = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 export const generateStudyHelp = async (query: string, history: ChatMessage[] = []): Promise<string> => {
-  const ai = getClient();
-  
-  if (!ai) {
-    return "API Key is missing. Please click the Settings (Gear) icon in the header to configure your Google Gemini API Key.";
-  }
-
   try {
-    const model = 'gemini-3-flash-preview';
+    const ai = getAiClient();
+    const modelName = 'gemini-3-flash-preview';
     
-    // Map existing history to Gemini parts format
     const formattedHistory = history.map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.text }]
     }));
 
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: [
         ...formattedHistory,
         { role: 'user', parts: [{ text: query }] }
       ],
       config: {
         systemInstruction: `You are an intelligent academic assistant for students of Ranchi University. 
-        Your goal is to help students understand complex topics, summarize notes, or explain concepts from their syllabus (Physics, Math, History, etc.). 
-        Be concise, academic, and encouraging. If asked about specific previous year questions, give general guidance on how to solve similar problems.
+        Your goal is to help students understand complex topics, summarize notes, or explain concepts from their syllabus. 
+        Be concise, academic, and encouraging. Use formatting like bullet points where helpful.
         Maintain context of the previous messages in the chat.`,
       }
     });
 
+    // Accessing text via property, not method call
     return response.text || "I couldn't generate a response. Please try again.";
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    if (error.message && error.message.includes('API key')) {
-        return "Invalid API Key. Please update it in Settings.";
-    }
-    return "Sorry, I encountered an error while processing your request. Please check your network or API quota.";
+    return "The AI assistant is currently unavailable. Please check the Netlify environment configuration (API_KEY).";
   }
 };
 
 export const generateAssessmentQuestions = async (subject: string, semester: number, paperName: string): Promise<Question[]> => {
-  const ai = getClient();
-  if (!ai) {
-      alert("API Key is missing. Please configure it in Settings.");
-      return [];
-  }
-
   try {
+    const ai = getAiClient();
     const prompt = `Generate a university-level exam paper for:
     Subject: ${subject}
     Semester: ${semester}
@@ -75,7 +51,7 @@ export const generateAssessmentQuestions = async (subject: string, semester: num
 
     Create exactly 5 Multiple Choice Questions (MCQ) and 2 Short Subjective Questions.
     
-    Return ONLY valid JSON in the following format (no markdown, no backticks):
+    Return ONLY valid JSON in the following format:
     [
       { "id": 1, "type": "MCQ", "text": "Question text", "options": ["A", "B", "C", "D"], "correctAnswer": "Option text", "maxMarks": 2 },
       ...
@@ -93,8 +69,7 @@ export const generateAssessmentQuestions = async (subject: string, semester: num
     const text = response.text;
     if (!text) return [];
     
-    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(jsonStr) as Question[];
+    return JSON.parse(text) as Question[];
   } catch (e) {
     console.error("Failed to generate questions", e);
     return [];
@@ -102,16 +77,14 @@ export const generateAssessmentQuestions = async (subject: string, semester: num
 };
 
 export const evaluateAssessment = async (questions: Question[], answers: Record<number, string>): Promise<{ score: number, total: number, feedback: string }> => {
-  const ai = getClient();
-  if (!ai) return { score: 0, total: 0, feedback: "API Key Config Error" };
-
   try {
+    const ai = getAiClient();
     const evaluationPayload = {
       questions: questions,
       studentAnswers: answers
     };
 
-    const prompt = `You are an academic examiner. Evaluate the following student assessment.
+    const prompt = `You are an academic examiner for Ranchi University. Evaluate the following student assessment.
     
     Data: ${JSON.stringify(evaluationPayload)}
 
@@ -126,7 +99,7 @@ export const evaluateAssessment = async (questions: Question[], answers: Record<
     }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -136,8 +109,7 @@ export const evaluateAssessment = async (questions: Question[], answers: Record<
     const text = response.text;
     if (!text) throw new Error("Empty response");
 
-    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const result = JSON.parse(jsonStr);
+    const result = JSON.parse(text);
     
     return {
       score: result.totalScoreObtained,

@@ -7,8 +7,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
-      // Shim to prevent errors if process is not defined (common in pure browser runs)
-      window.process = window.process || { env: { API_KEY: '' } };
+      /**
+       * Netlify Environment Shim
+       * Ensures process.env is defined even if not injected by a bundler
+       */
+      window.process = window.process || { env: {} };
+      window.process.env = {
+        API_KEY: window.process.env.API_KEY || '',
+        SUPABASE_URL: window.process.env.SUPABASE_URL || 'https://nxaterttiubxthvzwjwx.supabase.co',
+        SUPABASE_KEY: window.process.env.SUPABASE_KEY || 'sb_publishable_tJ03vjLNbP1re1fTFGE-6g_MyI0JjOq',
+        ...window.process.env
+      };
       
       tailwind.config = {
         darkMode: 'class',
@@ -20,10 +29,10 @@
             },
             colors: {
               university: {
-                900: '#0f172a', // Slate 900 (Deep Navy/Black)
-                800: '#1e293b', // Slate 800
-                accent: '#d97706', // Amber 600 (Gold)
-                light: '#f8fafc', // Slate 50 (Off White)
+                900: '#0f172a',
+                800: '#1e293b',
+                accent: '#d97706',
+                light: '#f8fafc',
               }
             }
           }
@@ -42,7 +51,6 @@
       h1, h2, h3, h4, h5, h6 {
         font-family: 'DM Serif Display', serif;
       }
-      /* Custom Scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
       }
@@ -62,8 +70,6 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
       }
-      
-      /* Header Gradient Animation */
       @keyframes gradient-xy {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
