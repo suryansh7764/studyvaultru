@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BookOpen, Shield, Github, Twitter, Mail, Phone, X, Instagram, Linkedin, Facebook, Youtube } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BookOpen, Shield, Mail, Phone, X, Instagram, Twitter, Facebook, Activity, Globe, Heart } from 'lucide-react';
 
 interface FooterProps {
   onNavigate: (section: string) => void;
@@ -8,11 +8,14 @@ interface FooterProps {
 const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [showContactModal, setShowContactModal] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const [visitorCount, setVisitorCount] = useState(36248);
 
-  const handleContactClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setShowContactModal(true);
-  };
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisitorCount(prev => prev + Math.floor(Math.random() * 3));
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLinkClick = (e: React.MouseEvent, section: string) => {
     e.preventDefault();
@@ -21,127 +24,132 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   };
 
   return (
-    <footer className="bg-gradient-to-br from-university-900 via-slate-900 to-black text-white pt-16 pb-8 border-t border-slate-800 relative">
+    <footer className="bg-slate-950 text-white border-t border-slate-900 pt-20 pb-10">
       
       {/* Contact Modal */}
       {showContactModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 w-full max-w-sm shadow-2xl border border-gray-200 dark:border-slate-700 relative scale-100 animate-in zoom-in-95 duration-200">
-             <button 
-                onClick={() => setShowContactModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
-             >
-               <X className="h-5 w-5" />
-             </button>
-             <h3 className="text-2xl font-serif font-bold text-university-900 dark:text-white mb-6">Contact Us</h3>
-             
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 w-full max-w-md border border-slate-200 dark:border-slate-800 shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+             <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-university-accent/10 rounded-xl">
+                        <Mail className="h-5 w-5 text-university-accent" />
+                    </div>
+                    <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">Get in Touch</h3>
+                </div>
+                <button onClick={() => setShowContactModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-2"><X className="h-6 w-6" /></button>
+             </div>
              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors group">
-                   <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                <a href="tel:6203577553" className="flex items-center gap-4 p-5 bg-gray-50 dark:bg-slate-800/50 rounded-2xl hover:bg-university-accent/5 transition-all group border border-transparent hover:border-university-accent/20">
+                   <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm text-university-accent group-hover:scale-110 transition-transform">
                       <Phone className="h-5 w-5" />
                    </div>
-                   <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Phone</p>
-                      <a href="tel:6203577553" className="text-gray-900 dark:text-white font-medium hover:text-university-accent text-lg block">+91 6203577553</a>
+                   <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Phone Support</span>
+                      <span className="text-base font-bold text-slate-700 dark:text-slate-200">+91 6203577553</span>
                    </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-slate-800 rounded-xl hover:bg-blue-100 dark:hover:bg-slate-700/50 transition-colors group">
-                   <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                </a>
+                <a href="mailto:suryanshkishor@gmail.com" className="flex items-center gap-4 p-5 bg-gray-50 dark:bg-slate-800/50 rounded-2xl hover:bg-university-accent/5 transition-all group border border-transparent hover:border-university-accent/20">
+                   <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm text-university-accent group-hover:scale-110 transition-transform">
                       <Mail className="h-5 w-5" />
                    </div>
-                   <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Email</p>
-                      <a href="mailto:suryanshkishor@gmail.com" className="text-gray-900 dark:text-white font-medium hover:text-university-accent text-base block break-all">suryanshkishor@gmail.com</a>
+                   <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Email Inquiry</span>
+                      <span className="text-base font-bold text-slate-700 dark:text-slate-200 truncate">suryanshkishor@gmail.com</span>
                    </div>
-                </div>
+                </a>
              </div>
-             
-             <div className="mt-6 text-center">
-               <p className="text-xs text-gray-400">We usually reply within 24 hours.</p>
-             </div>
+             <p className="mt-8 text-center text-xs text-slate-400">Available 10:00 AM — 6:00 PM IST</p>
           </div>
         </div>
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-          <div className="col-span-1 md:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-               {!logoError ? (
-                  <img 
-                    src="/logo.png" 
-                    alt="StudyVault Logo" 
-                    className="h-10 w-10 object-contain drop-shadow-md"
-                    onError={() => setLogoError(true)}
-                  />
-               ) : (
-                  <div className="bg-university-accent p-1.5 rounded-lg flex items-center justify-center">
-                      <Shield className="h-5 w-5 text-white" />
-                      <BookOpen className="h-3 w-3 text-white -ml-2.5 mt-2" />
-                  </div>
-               )}
-               <span className="font-serif text-xl font-bold">StudyVault</span>
-            </div>
-            <p className="text-slate-300 text-sm leading-relaxed max-w-sm">
-              "Knowledge Secured. Success Assured." <br/>
-              An open-source initiative to help Ranchi University students excel in their academics.
-            </p>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-y-16 gap-x-12 mb-20">
           
+          {/* Brand Info */}
+          <div className="col-span-2 space-y-8">
+            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('hero')}>
+               {!logoError ? (
+                  <img src="/logo.png" className="h-10 w-10 object-contain group-hover:scale-110 transition-transform duration-500" onError={() => setLogoError(true)} />
+               ) : (
+                  <Shield className="h-8 w-8 text-university-accent" />
+               )}
+               <div className="flex flex-col">
+                  <span className="font-serif text-2xl font-bold tracking-tight">StudyVault</span>
+                  <span className="text-[10px] text-university-accent font-bold uppercase tracking-[0.2em]">Knowledge Hub</span>
+               </div>
+            </div>
+            <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
+              Empowering students of Ranchi University with a centralized repository of academic excellence. Knowledge Secured. Success Assured.
+            </p>
+            
+            {/* Live Stats Pill */}
+            <div className="inline-flex items-center gap-4 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 group hover:border-university-accent/30 transition-all">
+               <div className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+               </div>
+               <div className="flex items-baseline gap-2">
+                  <span className="text-sm font-bold text-white tabular-nums tracking-wider">{visitorCount.toLocaleString()}</span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Global Reach</span>
+               </div>
+            </div>
+          </div>
+
+          {/* Nav Column 1 */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-university-accent mb-4">Quick Links</h4>
-            <ul className="space-y-3 text-sm text-slate-300">
-              <li><button onClick={handleContactClick} className="hover:text-white transition-colors text-left font-medium text-university-accent hover:underline">Contact Us</button></li>
-              <li><button onClick={(e) => handleLinkClick(e, 'about')} className="hover:text-white transition-colors">About Us</button></li>
-              <li><button onClick={(e) => handleLinkClick(e, 'submit')} className="hover:text-white transition-colors">Submit a Paper</button></li>
-              <li><button onClick={(e) => handleLinkClick(e, 'terms')} className="hover:text-white transition-colors">Terms of Service</button></li>
+            <h4 className="text-xs font-bold uppercase tracking-[0.25em] text-university-accent mb-8">Resources</h4>
+            <ul className="space-y-4 text-sm text-slate-400">
+              <li><button onClick={(e) => handleLinkClick(e, 'resources')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Question Papers</button></li>
+              <li><button onClick={(e) => handleLinkClick(e, 'resources')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Honors Notes</button></li>
+              <li><button onClick={(e) => handleLinkClick(e, 'resources')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Latest Syllabus</button></li>
+              <li><button onClick={() => setShowContactModal(true)} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Student Help</button></li>
             </ul>
           </div>
 
+          {/* Nav Column 2 */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-university-accent mb-4">Contact Info</h4>
-            <ul className="space-y-3 text-sm text-slate-300">
-              <li className="flex items-center gap-2 group">
-                <Mail className="h-4 w-4 group-hover:text-white transition-colors" />
-                <a href="mailto:suryanshkishor@gmail.com" className="hover:text-white transition-colors">suryanshkishor@gmail.com</a>
-              </li>
-              <li className="flex items-center gap-2 group">
-                <Phone className="h-4 w-4 group-hover:text-white transition-colors" />
-                <a href="tel:6203577553" className="hover:text-white transition-colors">+91 6203577553</a>
-              </li>
-              <li className="flex items-center gap-2 pt-2">
-                 <span className="text-xs text-slate-400">Ranchi, Jharkhand, India</span>
-              </li>
-            </ul>
-            <div className="flex flex-wrap gap-4 mt-6">
-              <a href="#" className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white hover:bg-university-accent transition-all hover:scale-110 transform" aria-label="Facebook">
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a 
-                href="https://www.instagram.com/suryanshthakur_77/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white hover:bg-pink-600 transition-all hover:scale-110 transform" 
-                aria-label="Instagram"
-              >
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white hover:bg-sky-500 transition-all hover:scale-110 transform" aria-label="Twitter">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white hover:bg-blue-700 transition-all hover:scale-110 transform" aria-label="LinkedIn">
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a href="#" className="bg-slate-800 p-2 rounded-full text-slate-400 hover:text-white hover:bg-red-600 transition-all hover:scale-110 transform" aria-label="YouTube">
-                <Youtube className="h-5 w-5" />
-              </a>
-            </div>
+             <h4 className="text-xs font-bold uppercase tracking-[0.25em] text-university-accent mb-8">Platform</h4>
+             <ul className="space-y-4 text-sm text-slate-400">
+                <li><button onClick={(e) => handleLinkClick(e, 'about')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Our Story</button></li>
+                <li><button onClick={(e) => handleLinkClick(e, 'submit')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Contribute</button></li>
+                <li><button onClick={(e) => handleLinkClick(e, 'terms')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Terms of Use</button></li>
+                <li><button onClick={(e) => handleLinkClick(e, 'planner')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Study Planner</button></li>
+             </ul>
+          </div>
+
+          {/* Connect Column */}
+          <div className="flex flex-col items-start md:items-end">
+             <h4 className="text-xs font-bold uppercase tracking-[0.25em] text-university-accent mb-8">Join the Circle</h4>
+             <div className="flex gap-4 mb-8">
+                <a href="https://www.instagram.com/suryanshthakur_77/" target="_blank" rel="noopener noreferrer" className="p-3 rounded-2xl bg-white/5 hover:bg-university-accent text-slate-500 hover:text-white transition-all hover:-translate-y-1 shadow-lg">
+                    <Instagram className="h-5 w-5" />
+                </a>
+                <a href="#" className="p-3 rounded-2xl bg-white/5 hover:bg-university-accent text-slate-500 hover:text-white transition-all hover:-translate-y-1 shadow-lg"><Twitter className="h-5 w-5" /></a>
+                <a href="#" className="p-3 rounded-2xl bg-white/5 hover:bg-university-accent text-slate-500 hover:text-white transition-all hover:-translate-y-1 shadow-lg"><Facebook className="h-5 w-5" /></a>
+             </div>
+             <div className="text-right">
+                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] mb-2">Designed With</p>
+                <div className="flex items-center justify-end gap-2 text-slate-400">
+                    <span className="text-xs font-medium">Passion for Education</span>
+                    <Heart className="h-4 w-4 text-red-500 fill-current" />
+                </div>
+             </div>
           </div>
         </div>
-        
-        <div className="border-t border-slate-800 pt-8 flex justify-center items-center text-xs text-slate-400">
-          <p>&copy; 2026 StudyVault. All rights reserved.</p>
+
+        {/* Bottom Bar */}
+        <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+           <div className="flex flex-col md:flex-row items-center gap-6">
+              <p className="text-xs text-slate-500 font-medium tracking-wide">&copy; 2026 StudyVault. Ranchi University Academic Node.</p>
+              <div className="h-4 w-px bg-slate-800 hidden md:block"></div>
+              <div className="flex items-center gap-6 text-[10px] text-slate-600 font-bold uppercase tracking-[0.15em]">
+                 <span className="flex items-center gap-2 hover:text-slate-400 transition-colors cursor-pointer"><Globe className="h-3.5 w-3.5" /> RU Network</span>
+                 <span className="flex items-center gap-2 hover:text-slate-400 transition-colors cursor-pointer"><Activity className="h-3.5 w-3.5" /> System Health</span>
+              </div>
+           </div>
+           <p className="text-[10px] text-slate-700 font-bold uppercase tracking-[0.2em]">Jharkhand Education Portals</p>
         </div>
       </div>
     </footer>

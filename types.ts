@@ -1,5 +1,3 @@
-
-
 export interface College {
   id: string;
   name: string;
@@ -10,6 +8,7 @@ export interface Subject {
   id: string;
   name: string;
   description?: string;
+  faculty: 'Science' | 'Social Science' | 'Humanities' | 'TRL' | 'Vocational';
 }
 
 export enum ResourceType {

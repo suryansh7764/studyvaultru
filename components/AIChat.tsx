@@ -1,24 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Sparkles, Loader2, RotateCcw } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, RotateCcw } from 'lucide-react';
 import { generateStudyHelp } from '../services/geminiService';
 import { ChatMessage } from '../types';
 
 const AIChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const savedChat = localStorage.getItem('ru_chat_history');
-    if (savedChat) {
-      try {
-        return JSON.parse(savedChat);
-      } catch (e) {
-        console.error("Failed to parse chat history", e);
-      }
-    }
-    // Start with an empty message list to remove the previous greeting prompt
-    return [];
-  });
-  
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -31,10 +19,6 @@ const AIChat: React.FC = () => {
     if (isOpen) scrollToBottom();
   }, [messages, isOpen]);
 
-  useEffect(() => {
-    localStorage.setItem('ru_chat_history', JSON.stringify(messages));
-  }, [messages]);
-
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -43,7 +27,7 @@ const AIChat: React.FC = () => {
     setInput('');
     setIsLoading(true);
 
-    // Call the service without history context (as per 'remove previous prompt' request)
+    // Call service without history to ensure fresh response every time
     const responseText = await generateStudyHelp(input);
     
     setMessages(prev => [...prev, { role: 'model', text: responseText }]);
@@ -51,10 +35,7 @@ const AIChat: React.FC = () => {
   };
 
   const handleClearChat = () => {
-    if (window.confirm("Are you sure you want to clear your chat history?")) {
-      setMessages([]);
-      localStorage.removeItem('ru_chat_history');
-    }
+    setMessages([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -78,7 +59,7 @@ const AIChat: React.FC = () => {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-university-accent"></span>
             </span>
           </div>
-          <span className="font-medium">Help</span>
+          <span className="font-medium">Academic Help</span>
         </button>
       )}
 
@@ -87,13 +68,13 @@ const AIChat: React.FC = () => {
           <div className="bg-university-900 dark:bg-slate-800 p-4 flex justify-between items-center text-white border-b border-white/5">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-university-accent" />
-              <h3 className="font-semibold font-serif">Gemini Assistant</h3>
+              <h3 className="font-semibold font-serif text-lg">Study Assistant</h3>
             </div>
             <div className="flex items-center gap-2">
               <button 
                 onClick={handleClearChat}
                 className="text-gray-400 hover:text-white transition-colors p-1"
-                title="Clear Chat History"
+                title="Clear Session"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -112,8 +93,8 @@ const AIChat: React.FC = () => {
                  <div className="bg-university-accent/10 p-4 rounded-full mb-4">
                     <Sparkles className="h-8 w-8 text-university-accent" />
                  </div>
-                 <h4 className="text-gray-900 dark:text-white font-bold mb-2">How can I help you?</h4>
-                 <p className="text-gray-500 dark:text-gray-400 text-xs">Ask me about Ranchi University syllabus, notes, or academic topics.</p>
+                 <h4 className="text-gray-900 dark:text-white font-bold mb-2">How can I assist you?</h4>
+                 <p className="text-gray-500 dark:text-gray-400 text-xs">Ask about Ranchi University syllabus, clarify complex concepts, or request summaries of your notes.</p>
               </div>
             )}
             {messages.map((msg, idx) => (
@@ -151,7 +132,7 @@ const AIChat: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask for summaries or tips..."
+                placeholder="Type your question..."
                 className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent transition-all dark:text-white"
                 disabled={isLoading}
               />
@@ -162,9 +143,6 @@ const AIChat: React.FC = () => {
               >
                 <Send className="h-5 w-5" />
               </button>
-            </div>
-            <div className="text-center mt-2">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">Standalone Mode • Gemini 3 Flash</span>
             </div>
           </div>
         </div>

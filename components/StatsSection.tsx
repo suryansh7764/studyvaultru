@@ -1,104 +1,94 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Resource, ResourceType } from '../types';
-import { COLLEGES, SUBJECTS } from '../constants';
+import { Resource } from '../types.ts';
+import { COLLEGES, SUBJECTS } from '../constants.ts';
+import { 
+  FileText, Building2, Users, GraduationCap
+} from 'lucide-react';
 
 interface StatsSectionProps {
   resources: Resource[];
 }
 
 const StatsSection: React.FC<StatsSectionProps> = ({ resources }) => {
-  // Aggregate data for the chart: Count by Resource Type
-  const data = [
-    { name: 'Question Papers', count: resources.filter(r => r.type === ResourceType.PYQ).length, color: '#0f172a' },
-    { name: 'Lecture Notes', count: resources.filter(r => r.type === ResourceType.NOTE).length, color: '#d97706' },
-    { name: 'Syllabus', count: resources.filter(r => r.type === ResourceType.SYLLABUS).length, color: '#475569' },
-  ];
-
-  // Calculate dynamic counts (subtracting 1 to exclude the 'All' option)
   const collegesCount = Math.max(0, COLLEGES.length - 1);
   const subjectsCount = Math.max(0, SUBJECTS.length - 1);
 
-  // Calculate total downloads
-  const totalDownloads = resources.reduce((sum, res) => sum + res.downloadCount, 0);
-  const formattedDownloads = totalDownloads > 1000 ? `${(totalDownloads / 1000).toFixed(1)}k+` : totalDownloads;
-
   return (
-    <div id="stats" className="bg-white dark:bg-slate-900 py-16 sm:py-24 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="md:flex md:items-center md:justify-between mb-12">
-          <div className="max-w-xl">
-            <h2 className="text-3xl font-serif font-bold text-university-900 dark:text-white sm:text-4xl">
-              Growing Database
-            </h2>
-            <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-              We are constantly updating our repository with the latest materials from all semesters and departments.
-            </p>
-          </div>
-        </div>
+    <div id="stats" className="bg-gray-50 dark:bg-slate-950 py-16 transition-colors relative overflow-hidden border-t border-gray-100 dark:border-slate-900">
+      {/* Subtle Background Decoration */}
+      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-university-accent/5 blur-[100px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/5 blur-[80px] rounded-full pointer-events-none"></div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* Chart */}
-          <div className="h-full min-h-[320px] w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-6 shadow-inner flex flex-col justify-center">
-             <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    cursor={{fill: 'transparent'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: '#fff' }}
-                  />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={60}>
-                    {data.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-             </ResponsiveContainer>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="flex flex-col items-center">
+          
+          {/* Header Section */}
+          <div className="text-center mb-12">
+             <div className="inline-flex items-center gap-2 mb-4">
+                <span className="h-px w-8 bg-university-accent"></span>
+                <span className="text-[10px] font-bold text-university-accent uppercase tracking-[0.25em]">Database Statistics</span>
+                <span className="h-px w-8 bg-university-accent"></span>
+             </div>
+             <h2 className="text-4xl font-serif font-bold text-gray-900 dark:text-white leading-tight mb-4">
+               Our <span className="text-university-accent">Academic</span> Repository
+             </h2>
+             <p className="text-base text-gray-500 dark:text-gray-400 font-medium max-w-2xl mx-auto">
+               Providing comprehensive coverage across all affiliated institutions and honors departments of Ranchi University.
+             </p>
           </div>
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
-             {/* 1. Total Documents */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-900 dark:text-white">{resources.length}+</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Total Documents</p>
-             </div>
-
-             {/* 2. Colleges */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-accent">{collegesCount}</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Affiliated Colleges</p>
-             </div>
-
-             {/* 3. Departments */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-900 dark:text-white">{subjectsCount}</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Departments</p>
-             </div>
-
-             {/* 4. Semesters */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-accent">8</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Semesters</p>
-             </div>
-
-             {/* 5. Downloads */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-900 dark:text-white">{formattedDownloads}</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Downloads</p>
-             </div>
-
-             {/* 6. Visitors */}
-             <div className="bg-university-light dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 flex flex-col justify-center">
-                <p className="text-3xl sm:text-4xl font-bold text-university-accent">1.2k+</p>
-                <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base font-medium">Daily Visitors</p>
-             </div>
+          {/* Statistics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+             <MiniStatCard 
+                icon={<FileText className="h-5 w-5" />} 
+                label="Resources" 
+                value={`${resources.length}+`} 
+                color="amber"
+             />
+             <MiniStatCard 
+                icon={<Building2 className="h-5 w-5" />} 
+                label="Colleges" 
+                value={collegesCount} 
+                color="blue"
+             />
+             <MiniStatCard 
+                icon={<Users className="h-5 w-5" />} 
+                label="Honors" 
+                value={subjectsCount} 
+                color="purple"
+             />
+             <MiniStatCard 
+                icon={<GraduationCap className="h-5 w-5" />} 
+                label="Semesters" 
+                value="8" 
+                color="emerald"
+             />
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+const MiniStatCard = ({ icon, label, value, color }: { icon: any, label: string, value: string | number, color: string }) => {
+    const colorMap: Record<string, string> = {
+        amber: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-100/50 dark:border-amber-500/20',
+        blue: 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 border-blue-100/50 dark:border-blue-500/20',
+        purple: 'text-purple-500 bg-purple-50 dark:bg-purple-500/10 border-purple-100/50 dark:border-purple-500/20',
+        emerald: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100/50 dark:border-emerald-500/20',
+    };
+
+    return (
+        <div className={`p-6 rounded-3xl border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 flex items-center gap-5 bg-white dark:bg-slate-900/60 ${colorMap[color]}`}>
+            <div className={`p-3.5 rounded-2xl ${colorMap[color]}`}>
+                {icon}
+            </div>
+            <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white leading-none tracking-tight">{value}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">{label}</p>
+            </div>
+        </div>
+    );
 };
 
 export default StatsSection;

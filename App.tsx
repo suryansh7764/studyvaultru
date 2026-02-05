@@ -1,32 +1,31 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import Header from './components/Header';
-import Hero from './components/Hero';
-import ResourceList from './components/ResourceList';
-import SubjectGrid from './components/SubjectGrid';
-import PatternSelection from './components/PatternSelection';
-import DegreeSelection from './components/DegreeSelection';
-import SemesterSelection from './components/SemesterSelection';
-import CollegeSelection from './components/CollegeSelection';
-import ResourceTypeSelection from './components/ResourceTypeSelection';
-import FilterSection from './components/FilterSection'; 
-import StatsSection from './components/StatsSection';
-import StudyPlanner from './components/StudyPlanner';
-import AboutUs from './components/AboutUs'; 
-import SubmitPaper from './components/SubmitPaper';
-import AdminDashboard from './components/AdminDashboard'; 
-import AssessmentSection from './components/AssessmentSection';
-import AssessmentHistory from './components/AssessmentHistory';
-import UserProfile from './components/UserProfile';
-import Footer from './components/Footer';
-import AIChat from './components/AIChat';
-import TermsOfService from './components/TermsOfService';
-import LoginModal from './components/LoginModal';
-import { ResourceType, CoursePattern, DegreeLevel, FilterState, User, Submission, Resource, AssessmentResult, LoginRecord } from './types'; 
-import { SUBJECTS, COLLEGES } from './constants';
+import Header from './components/Header.tsx';
+import Hero from './components/Hero.tsx';
+import ResourceList from './components/ResourceList.tsx';
+import SubjectGrid from './components/SubjectGrid.tsx';
+import PatternSelection from './components/PatternSelection.tsx';
+import DegreeSelection from './components/DegreeSelection.tsx';
+import SemesterSelection from './components/SemesterSelection.tsx';
+import CollegeSelection from './components/CollegeSelection.tsx';
+import ResourceTypeSelection from './components/ResourceTypeSelection.tsx';
+import FilterSection from './components/FilterSection.tsx'; 
+import StatsSection from './components/StatsSection.tsx';
+import StudyPlanner from './components/StudyPlanner.tsx';
+import AboutUs from './components/AboutUs.tsx'; 
+import SubmitPaper from './components/SubmitPaper.tsx';
+import AdminDashboard from './components/AdminDashboard.tsx'; 
+import AssessmentSection from './components/AssessmentSection.tsx';
+import AssessmentHistory from './components/AssessmentHistory.tsx';
+import UserProfile from './components/UserProfile.tsx';
+import Footer from './components/Footer.tsx';
+import AIChat from './components/AIChat.tsx';
+import TermsOfService from './components/TermsOfService.tsx';
+import LoginModal from './components/LoginModal.tsx';
+import { ResourceType, CoursePattern, DegreeLevel, FilterState, User, Submission, Resource, AssessmentResult, LoginRecord } from './types.ts'; 
+import { SUBJECTS, COLLEGES } from './constants.ts';
 import { ChevronRight, Home, CalendarCheck, Info, Upload, ShieldCheck, ScrollText, PenTool, Loader2, History, Bookmark, CheckCircle, XCircle, User as UserIcon } from 'lucide-react';
-import { db } from './services/db';
-import { supabase } from './services/supabase';
+import { db } from './services/db.ts';
+import { supabase } from './services/supabase.ts';
 
 type ViewState = 'subjects' | 'patterns' | 'degrees' | 'colleges' | 'semesters' | 'resource-types' | 'list' | 'planner' | 'about' | 'submit' | 'admin' | 'terms' | 'assessments' | 'assessment-history' | 'profile';
 
@@ -55,7 +54,6 @@ const App: React.FC = () => {
         const resources = await db.getAllResources();
         setAllResources(resources);
 
-        // Submissions & Login Records
         const history = await db.getLoginHistory();
         setLoginRecords(history);
 
@@ -70,15 +68,12 @@ const App: React.FC = () => {
 
     initData();
 
-    // Supabase Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
-            // User is signed in
             const profile = await db.getUser(session.user.id);
             if (profile) {
                 setUser(profile);
             } else {
-                // First time login or profile missing, create one based on auth data
                 const newUser: User = {
                     id: session.user.id,
                     identifier: session.user.email || '',
@@ -93,7 +88,6 @@ const App: React.FC = () => {
                 setUser(newUser);
             }
         } else {
-            // User is signed out
             setUser(null);
         }
     });
@@ -104,7 +98,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Theme logic
     const isDark = localStorage.getItem('theme') === 'dark' || 
       (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
     setDarkMode(isDark);
@@ -127,22 +120,18 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Callback after successful login from Modal
   const handleLogin = async (uid: string, identifier: string, name: string, collegeId: string) => {
     const profile = await db.getUser(uid);
     
-    // Update DB
     await db.saveUser({
         ...(profile || { 
             id: uid, identifier, name, collegeId, isLoggedIn: true, credits: 0, assessmentHistory: [], savedResources: []
         })
     });
 
-    // Refresh user state
     const freshProfile = await db.getUser(uid);
     if(freshProfile) setUser(freshProfile);
 
-    // Log Login
     const newRecord: LoginRecord = {
       id: Date.now().toString(),
       identifier,
@@ -163,14 +152,12 @@ const App: React.FC = () => {
   };
 
   const handleToggleFavorite = async (resourceId: string) => {
-      // STRICT REQUIREMENT: Only logged in users can save
       if (!user) {
           setIsLoginModalOpen(true);
           showToast("Please login to like/save items", "error");
           return;
       }
 
-      // Optimistic update
       const isSaved = user.savedResources?.includes(resourceId) || false;
       const newSaved = isSaved 
           ? user.savedResources?.filter(id => id !== resourceId) || []
@@ -205,7 +192,6 @@ const App: React.FC = () => {
   };
 
   const handleSubmitPaper = async (file: File, subjectId: string, semester: string, type: ResourceType, additional: {collegeId: string, pattern: CoursePattern, degreeLevel: DegreeLevel}) => {
-    // Strict check already in UI, but double check here
     if (!user) {
         setIsLoginModalOpen(true);
         return;
@@ -304,7 +290,6 @@ const App: React.FC = () => {
     setAllResources(prev => prev.filter(r => r.id !== id));
   };
 
-  // Selection State
   const [activeSubjectId, setActiveSubjectId] = useState<string | null>(null);
   const [activePattern, setActivePattern] = useState<CoursePattern | null>(null);
   const [activeDegree, setActiveDegree] = useState<DegreeLevel | null>(null);
@@ -371,7 +356,6 @@ const App: React.FC = () => {
       return;
     }
     if (sectionId === 'saved' || sectionId === 'profile') {
-        // Enforce login for profile/saved
         if (!user) {
             setIsLoginModalOpen(true);
             return;
@@ -495,7 +479,6 @@ const App: React.FC = () => {
      );
   }
 
-  // ... (Header and Breadcrumbs rendering remains the same)
   const getBreadcrumbs = () => (
     <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 py-3 sticky top-20 z-30 shadow-sm overflow-x-auto transition-colors">
        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-nowrap items-center text-sm whitespace-nowrap">
@@ -575,7 +558,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-950 transition-colors relative isolate">
-      {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-24 right-6 z-[100] animate-in slide-in-from-right-10 fade-in duration-300">
             <div className={`

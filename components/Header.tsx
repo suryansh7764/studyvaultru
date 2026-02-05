@@ -103,8 +103,6 @@ const Header: React.FC<HeaderProps> = ({ onLinkClick, darkMode, toggleTheme, use
           <div className="hidden md:flex items-center gap-8">
             <div className="flex items-center gap-1">
                <NavButton onClick={(e) => handleNavClick(e, 'hero', 'all')} label="Home" />
-               <NavButton onClick={(e) => handleNavClick(e, 'resources', ResourceType.PYQ)} label="Papers" />
-               <NavButton onClick={(e) => handleNavClick(e, 'resources', ResourceType.NOTE)} label="Notes" />
                <NavButton onClick={(e) => handleNavClick(e, 'assessments')} label="Assessments" icon={<PenTool className="h-3.5 w-3.5" />} />
                <NavButton onClick={(e) => handleNavClick(e, 'planner')} label="Planner" icon={<CalendarCheck className="h-3.5 w-3.5" />} />
             </div>
@@ -327,8 +325,6 @@ const Header: React.FC<HeaderProps> = ({ onLinkClick, darkMode, toggleTheme, use
           )}
 
           <MobileNavLink onClick={(e) => handleNavClick(e, 'hero', 'all')} label="Home" />
-          <MobileNavLink onClick={(e) => handleNavClick(e, 'resources', ResourceType.PYQ)} label="Question Papers" />
-          <MobileNavLink onClick={(e) => handleNavClick(e, 'resources', ResourceType.NOTE)} label="Lecture Notes" />
           <MobileNavLink onClick={(e) => handleNavClick(e, 'assessments')} label="Check Assessment" icon={<PenTool className="h-4 w-4" />} />
           <MobileNavLink onClick={(e) => handleNavClick(e, 'planner')} label="Study Planner" icon={<CalendarCheck className="h-4 w-4" />} />
           <MobileNavLink onClick={(e) => handleNavClick(e, 'submit')} label="Upload" icon={<Upload className="h-4 w-4" />} />

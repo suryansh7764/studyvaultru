@@ -1,8 +1,7 @@
-import { supabase } from './supabase';
-import { User, Resource, Submission, LoginRecord, ResourceType, CoursePattern, DegreeLevel } from '../types';
-import { MOCK_RESOURCES } from '../constants';
+import { supabase } from './supabase.ts';
+import { User, Resource, Submission, LoginRecord, ResourceType, CoursePattern, DegreeLevel } from '../types.ts';
+import { MOCK_RESOURCES } from '../constants.ts';
 
-// Helper to map DB row (snake_case) to Resource (camelCase)
 const mapResource = (row: any): Resource => ({
   id: row.id,
   title: row.title,
@@ -19,7 +18,6 @@ const mapResource = (row: any): Resource => ({
   createdAt: row.created_at,
 });
 
-// Helper to map Resource to DB row
 const mapResourceToRow = (res: Resource) => ({
   id: res.id,
   title: res.title,
@@ -41,7 +39,7 @@ const mapSubmission = (row: any): Submission => ({
   userId: row.user_id,
   userIdentifier: row.user_identifier,
   fileName: row.file_name,
-  fileUrl: row.file_path, // Storing path as url for internal ref
+  fileUrl: row.file_path, 
   subjectId: row.subject_id,
   subjectName: row.subject_name,
   semester: row.semester,
@@ -55,7 +53,6 @@ const mapSubmission = (row: any): Submission => ({
 });
 
 export const db = {
-  // --- Resources ---
   async getAllResources(): Promise<Resource[]> {
     const { data, error } = await supabase
       .from('resources')
@@ -84,7 +81,6 @@ export const db = {
     if (error) console.error('Error deleting resource:', error);
   },
 
-  // --- Users ---
   async getUser(id: string): Promise<User | undefined> {
     const { data, error } = await supabase
       .from('profiles')
@@ -122,7 +118,6 @@ export const db = {
   },
 
   async toggleFavorite(userId: string, resourceId: string): Promise<string[]> {
-    // 1. Get current list
     const { data, error } = await supabase
         .from('profiles')
         .select('saved_resources')
@@ -142,7 +137,6 @@ export const db = {
         current.push(resourceId);
     }
 
-    // 2. Update list
     await supabase.from('profiles').update({ saved_resources: current }).eq('id', userId);
     return current;
   },
@@ -163,7 +157,6 @@ export const db = {
     }));
   },
 
-  // --- Submissions ---
   async getAllSubmissions(): Promise<Submission[]> {
     const { data, error } = await supabase.from('submissions').select('*');
     if (error || !data) return [];
@@ -221,7 +214,6 @@ export const db = {
     if (error) console.error('Error deleting submission:', error);
   },
 
-  // --- Files ---
   async saveFile(resourceId: string, file: Blob): Promise<void> {
     const fileName = `${resourceId}.pdf`; 
     const { error } = await supabase.storage
@@ -269,7 +261,6 @@ export const db = {
      return undefined;
   },
 
-  // --- Login History ---
   async addLoginRecord(record: LoginRecord): Promise<void> {
     const row = {
       id: record.id,

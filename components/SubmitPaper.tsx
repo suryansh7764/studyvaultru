@@ -1,8 +1,8 @@
-
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Award, Gift, LogIn, X, Clock, User as UserIcon, Building2, Mail, Phone } from 'lucide-react';
-import { User, ResourceType, Submission, CoursePattern, DegreeLevel } from '../types';
-import { SUBJECTS, SEMESTERS, COLLEGES } from '../constants';
+import { Upload, FileText, CheckCircle, AlertCircle, Award, Gift, X, Clock } from 'lucide-react';
+import { User, ResourceType, Submission, CoursePattern, DegreeLevel } from '../types.ts';
+import { SUBJECTS, SEMESTERS, COLLEGES } from '../constants.ts';
+import LoginModal from './LoginModal.tsx';
 
 interface SubmitPaperProps {
   user: User | null;
@@ -18,7 +18,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
   const [semester, setSemester] = useState('');
   const [type, setType] = useState<ResourceType | ''>('');
   
-  // New mandatory fields for proper resource creation
   const [collegeId, setCollegeId] = useState('');
   const [pattern, setPattern] = useState<CoursePattern | ''>('');
   const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | ''>('');
@@ -26,7 +25,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Login Modal State
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +78,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
 
     setIsSubmitting(true);
 
-    // Simulate upload delay
     setTimeout(() => {
       onSubmitPaper(file, subjectId, semester, type as ResourceType, {
           collegeId,
@@ -90,7 +87,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
       setIsSubmitting(false);
       setSubmitted(true);
       
-      // Reset form after 4 seconds
       setTimeout(() => {
         setSubmitted(false);
         setFile(null);
@@ -113,8 +109,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
-      {/* Header Section */}
       <div className="text-center mb-12">
         <span className="inline-block py-1 px-3 rounded-full bg-university-accent/10 text-university-accent text-xs font-bold tracking-widest uppercase mb-4">
            Contribute & Earn
@@ -128,8 +122,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        
-        {/* Left: Credit Status Card */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-university-900 dark:bg-slate-800 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
             <div className="relative z-10">
@@ -184,7 +176,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
           </div>
         </div>
 
-        {/* Right: Upload Form */}
         <div className="lg:col-span-2">
            {submitted ? (
              <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-white dark:bg-slate-900 rounded-3xl border border-green-200 dark:border-green-900 p-8 text-center animate-in zoom-in-95 duration-500">
@@ -204,8 +195,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
              </div>
            ) : (
              <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-lg border border-gray-100 dark:border-slate-800">
-                
-                {/* Drag and Drop Area */}
                 <div 
                   className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200 mb-8 cursor-pointer ${
                     dragActive 
@@ -246,7 +235,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
                   )}
                 </div>
 
-                {/* Metadata Fields */}
                 <div className="space-y-5">
                    <div>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">College Name</label>
@@ -362,7 +350,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
         </div>
       </div>
 
-      {/* History Table Unchanged */}
       {user && userSubmissions.length > 0 && (
          <div className="mt-16 border-t border-gray-200 dark:border-slate-800 pt-12">
             <h3 className="text-2xl font-serif font-bold text-university-900 dark:text-white mb-6">Your Contribution History</h3>
@@ -416,22 +403,6 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
          </div>
       )}
 
-      {/* Login Modal */}
-      {/* Note: In a real app, we should import LoginModal component, but to avoid circular deps in this simplified structure, we reuse the existing one or conditionally render. 
-          Actually, we can just use the prop onLogin which opens the main app login modal or render a local one. 
-          For consistency with other components, we should use the same LoginModal component. 
-          However, SubmitPaper is imported in App.tsx which imports LoginModal. So we can't import LoginModal here easily without circular dep if types share file.
-          But we can just reuse the one passed from App if we lifted state up, OR we just render the modal here if we import it.
-          Let's assume we import LoginModal from components/LoginModal.
-      */}
-      {/* Re-using the imported LoginModal component for this specific flow */}
-      {/* We need to import LoginModal at the top of file */}
-      {/* Since we can't easily change imports in this XML block without full file content, I'm assuming LoginModal is not imported. 
-          Wait, the previous file had LoginModal defined locally or imported. 
-          Ah, I see LoginModal is imported in App.tsx. 
-          I will just invoke the prop if needed or render inline if I can't import.
-          Actually, I will import it.
-      */}
       <LoginModal 
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
@@ -440,8 +411,5 @@ const SubmitPaper: React.FC<SubmitPaperProps> = ({ user, userSubmissions, onLogi
     </div>
   );
 };
-
-// We need to import LoginModal to use it in JSX
-import LoginModal from './LoginModal';
 
 export default SubmitPaper;
