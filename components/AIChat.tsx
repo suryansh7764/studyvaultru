@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Loader2, RotateCcw } from 'lucide-react';
 import { generateStudyHelp } from '../services/geminiService';

@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase.ts';
 import { User, Resource, Submission, LoginRecord, ResourceType, CoursePattern, DegreeLevel } from '../types.ts';
 import { MOCK_RESOURCES } from '../constants.ts';
@@ -53,6 +54,45 @@ const mapSubmission = (row: any): Submission => ({
 });
 
 export const db = {
+  async checkSystemHealth() {
+    const results = {
+      profilesTable: false,
+      resourcesTable: false,
+      submissionsTable: false,
+      ordersTable: false,
+      resourcesBucket: false,
+      submissionsBucket: false
+    };
+
+    try {
+      // Test Table Existence via Select
+      const { error: p } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).limit(1);
+      results.profilesTable = !p || (p.code !== '42P01');
+      
+      const { error: r } = await supabase.from('resources').select('id', { count: 'exact', head: true }).limit(1);
+      results.resourcesTable = !r || (r.code !== '42P01');
+
+      const { error: s } = await supabase.from('submissions').select('id', { count: 'exact', head: true }).limit(1);
+      results.submissionsTable = !s || (s.code !== '42P01');
+
+      const { error: o } = await supabase.from('orders').select('id', { count: 'exact', head: true }).limit(1);
+      results.ordersTable = !o || (o.code !== '42P01');
+
+      // Test Bucket Existence
+      const { data: buckets, error: bErr } = await supabase.storage.listBuckets();
+      if (!bErr && buckets) {
+          results.resourcesBucket = buckets.some(b => b.name === 'resources');
+          results.submissionsBucket = buckets.some(b => b.name === 'submissions');
+      } else {
+          console.warn("Could not list buckets", bErr);
+      }
+    } catch (e) {
+      console.error("Health check failed critical path", e);
+    }
+
+    return results;
+  },
+
   async getAllResources(): Promise<Resource[]> {
     const { data, error } = await supabase
       .from('resources')
@@ -61,11 +101,10 @@ export const db = {
 
     if (error) {
       console.error('Error fetching resources:', error);
-      if (data === null || data.length === 0) return MOCK_RESOURCES;
-      return [];
+      return MOCK_RESOURCES;
     }
     
-    if (data.length === 0) return MOCK_RESOURCES;
+    if (!data || data.length === 0) return MOCK_RESOURCES;
 
     return data.map(mapResource);
   },
@@ -73,12 +112,18 @@ export const db = {
   async addResource(resource: Resource): Promise<void> {
     const row = mapResourceToRow(resource);
     const { error } = await supabase.from('resources').insert(row);
-    if (error) console.error('Error adding resource:', error);
+    if (error) {
+        if (error.code === '42501' || error.message?.includes('row-level security')) {
+            throw new Error("PERMISSION_DENIED_RESOURCES");
+        }
+        throw new Error(`DB_ERROR: ${error.message}`);
+    }
   },
 
   async deleteResource(id: string): Promise<void> {
     const { error } = await supabase.from('resources').delete().eq('id', id);
     if (error) console.error('Error deleting resource:', error);
+    await supabase.storage.from('resources').remove([`${id}.pdf`]);
   },
 
   async getUser(id: string): Promise<User | undefined> {
@@ -124,13 +169,9 @@ export const db = {
         .eq('id', userId)
         .single();
     
-    if (error) {
-        console.error("Error fetching favorites", error);
-        return [];
-    }
+    if (error) return [];
 
     let current: string[] = data?.saved_resources || [];
-    
     if (current.includes(resourceId)) {
         current = current.filter(id => id !== resourceId);
     } else {
@@ -139,22 +180,6 @@ export const db = {
 
     await supabase.from('profiles').update({ saved_resources: current }).eq('id', userId);
     return current;
-  },
-
-  async getAllUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('profiles').select('*');
-    if (error || !data) return [];
-    
-    return data.map(d => ({
-      id: d.id,
-      identifier: d.email,
-      name: d.name,
-      collegeId: d.college_id,
-      isLoggedIn: false,
-      credits: d.credits,
-      assessmentHistory: d.assessment_history,
-      savedResources: d.saved_resources
-    }));
   },
 
   async getAllSubmissions(): Promise<Submission[]> {
@@ -172,8 +197,18 @@ export const db = {
         .upload(fileName, file);
       
       if (uploadError) {
-        console.error('Upload failed:', uploadError);
-        return;
+        console.error('Storage Upload Error Detail:', uploadError);
+        const errObj = uploadError as any;
+        
+        // Handle 403 RLS violation
+        if (errObj.statusCode === "403" || errObj.message?.includes('policy') || errObj.error === "Unauthorized" || errObj.status === 403) {
+            throw new Error("PERMISSION_DENIED_SUBMISSIONS");
+        }
+        
+        if (errObj.message?.includes('Bucket not found') || errObj.statusCode === "404" || errObj.status === 404) {
+            throw new Error("BUCKET_MISSING_SUBMISSIONS");
+        }
+        throw new Error(`UPLOAD_FAILED: ${uploadError.message}`);
       }
       filePath = fileName;
     }
@@ -197,7 +232,29 @@ export const db = {
     };
 
     const { error } = await supabase.from('submissions').insert(row);
-    if (error) console.error('Error creating submission:', error);
+    if (error) {
+        if (error.code === '42501' || error.message?.includes('row-level security')) {
+            throw new Error("PERMISSION_DENIED_TABLE_SUBMISSIONS");
+        }
+        throw new Error(`TABLE_MISSING_SUBMISSIONS: ${error.message}`);
+    }
+  },
+
+  async createOrder(order: any): Promise<void> {
+    const { error } = await supabase.from('orders').insert({
+        id: crypto.randomUUID(),
+        user_id: order.userId,
+        email: order.email,
+        item_name: order.itemName,
+        subject: order.subject,
+        semester: order.semester,
+        details: order.details,
+        status: 'pending',
+        timestamp: Date.now()
+    });
+    if (error) {
+        throw new Error(`TABLE_MISSING_ORDERS: ${error.message}`);
+    }
   },
 
   async updateSubmission(submission: Submission): Promise<void> {
@@ -210,51 +267,46 @@ export const db = {
   },
 
   async deleteSubmission(id: string): Promise<void> {
+    const { data: sub } = await supabase.from('submissions').select('file_path').eq('id', id).single();
+    if (sub?.file_path) {
+        await supabase.storage.from('submissions').remove([sub.file_path]);
+    }
     const { error } = await supabase.from('submissions').delete().eq('id', id);
     if (error) console.error('Error deleting submission:', error);
   },
 
-  async saveFile(resourceId: string, file: Blob): Promise<void> {
+  async saveFile(resourceId: string, file: Blob): Promise<string | null> {
     const fileName = `${resourceId}.pdf`; 
     const { error } = await supabase.storage
         .from('resources')
         .upload(fileName, file, { upsert: true });
 
     if (error) {
-        console.error('File save failed:', error);
-        return;
+        const errObj = error as any;
+        if (errObj.statusCode === "403" || errObj.message?.includes('policy') || errObj.status === 403) {
+            throw new Error("PERMISSION_DENIED_RESOURCES");
+        }
+        if (errObj.message?.includes('Bucket not found') || errObj.statusCode === "404" || errObj.status === 404) {
+            throw new Error("BUCKET_MISSING_RESOURCES");
+        }
+        return null;
     }
 
     const { data } = supabase.storage.from('resources').getPublicUrl(fileName);
-    const cleanId = resourceId.startsWith('res-') ? resourceId : resourceId;
-    await supabase.from('resources').update({ download_url: data.publicUrl }).eq('id', cleanId);
-  },
-
-  async getFile(id: string): Promise<Blob | undefined> {
-    if (id.startsWith('sub-')) {
-       const subId = id.replace('sub-', '');
-       const { data: subData } = await supabase.from('submissions').select('file_path').eq('id', subId).single();
-       if (subData?.file_path) {
-           const { data } = await supabase.storage.from('submissions').download(subData.file_path);
-           return data || undefined;
-       }
-    } else {
-       const fileName = `${id}.pdf`;
-       const { data } = await supabase.storage.from('resources').download(fileName);
-       return data || undefined;
-    }
-    return undefined;
+    return data.publicUrl;
   },
 
   async getFileUrl(id: string): Promise<string | undefined> {
      if (id.startsWith('res-')) {
-         const { data } = supabase.storage.from('resources').getPublicUrl(`${id}.pdf`);
+         const cleanId = id.replace('res-', '');
+         const { data } = supabase.storage.from('resources').getPublicUrl(`${cleanId}.pdf`);
          return data.publicUrl;
      } else if (id.startsWith('sub-')) {
          const subId = id.replace('sub-', '');
          const { data: subData } = await supabase.from('submissions').select('file_path').eq('id', subId).single();
          if (subData?.file_path) {
-             const { data } = await supabase.storage.from('submissions').createSignedUrl(subData.file_path, 60);
+             const { data, error } = await supabase.storage.from('submissions').createSignedUrl(subData.file_path, 3600);
+             if (error) return undefined;
              return data?.signedUrl;
          }
      }

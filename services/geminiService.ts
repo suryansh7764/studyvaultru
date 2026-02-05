@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Question, ChatMessage } from "../types";
 
@@ -58,6 +59,7 @@ export const generateAssessmentQuestions = async (subject: string, semester: num
       }
     });
 
+    // Property access .text
     const text = response.text;
     if (!text) return [];
     
@@ -98,6 +100,7 @@ export const evaluateAssessment = async (questions: Question[], answers: Record<
       }
     });
 
+    // Property access .text
     const text = response.text;
     if (!text) throw new Error("Empty response");
 

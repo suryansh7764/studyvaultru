@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { X, LogIn, Mail, ArrowRight, Loader2, User, Building2, Lock, ChevronLeft, CheckCircle, GraduationCap } from 'lucide-react';
+import { X, LogIn, Mail, ArrowRight, Loader2, User, Building2, Lock, ChevronLeft, CheckCircle, GraduationCap, AlertTriangle, ShieldAlert, ExternalLink, Settings } from 'lucide-react';
 import { COLLEGES } from '../constants';
 import { supabase } from '../services/supabase';
 
@@ -17,6 +18,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const [collegeId, setCollegeId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<'auth' | 'confirmation' | null>(null);
   
   // Success States
   const [resetSent, setResetSent] = useState(false);
@@ -29,6 +31,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
       setName('');
       setCollegeId('');
       setError('');
+      setErrorType(null);
       setIsLoading(false);
       setView('login');
       setResetSent(false);
@@ -41,11 +44,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setErrorType(null);
 
-    // Common Validation
     if (!email.trim()) return setError('Please enter your email address.');
 
-    // Forgot Password Flow
     if (view === 'forgot') {
         setIsLoading(true);
         const { error } = await supabase.auth.resetPasswordForEmail(email);
@@ -55,15 +57,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         return;
     }
 
-    // Login/Signup Validation
-    if (!password.trim()) {
-      return setError('Please enter your password.');
-    }
-
-    // Fix: Password length validation
-    if (password.length < 6) {
-      return setError('Password should be at least 6 characters.');
-    }
+    if (!password.trim()) return setError('Please enter your password.');
+    if (password.length < 6) return setError('Password should be at least 6 characters.');
 
     if (view === 'signup') {
         if (!name.trim()) return setError('Please enter your full name.');
@@ -74,7 +69,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
     try {
       if (view === 'signup') {
-        // Sign Up with Supabase
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -88,7 +82,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
 
         if (signUpError) throw signUpError;
 
-        // Check if email confirmation is required (session is null but user exists)
         if (data.user && !data.session) {
             setIsLoading(false);
             setVerificationSent(true);
@@ -100,7 +93,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
            onClose();
         }
       } else {
-        // Sign In
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
@@ -116,14 +108,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
         }
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('Supabase Auth Error:', err);
       const msg = err.message || "Authentication failed.";
       
-      // Fix: Handle specific error messages user requested
       if (msg.includes("Email not confirmed")) {
-          setError("Email not confirmed. Please check your inbox.");
+          setError("Account verification pending.");
+          setErrorType('confirmation');
       } else if (msg.includes("Invalid login credentials")) {
-          setError("Invalid login credentials. Please check your email and password.");
+          setError("Wrong email or password. Please try again.");
+          setErrorType('auth');
       } else {
           setError(msg);
       }
@@ -172,40 +165,58 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                       {view === 'signup' ? 'Create Account' : view === 'forgot' ? 'Reset Password' : 'Welcome Back'}
                    </h2>
                    <p className="text-gray-500 dark:text-gray-400">
-                      {view === 'signup' ? 'Join StudyVault via Supabase.' : 'Enter details to sign in.'}
+                      {view === 'signup' ? 'Join StudyVault today.' : 'Enter details to sign in.'}
                    </p>
                 </div>
 
-                {/* Verification Email Sent State */}
-                {verificationSent ? (
+                {errorType === 'confirmation' ? (
+                    <div className="animate-in slide-in-from-top-4 duration-300">
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-900/30 rounded-3xl p-6 mb-6">
+                            <div className="flex items-center gap-3 mb-3 text-amber-900 dark:text-amber-200">
+                                <Mail className="h-5 w-5 animate-bounce" />
+                                <h4 className="font-black text-xs uppercase tracking-widest">Verify Your Account</h4>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed mb-4">
+                                We sent a link to <span className="font-bold">{email}</span>. Please click it to login.
+                            </p>
+                            <div className="p-3 bg-white/50 dark:bg-black/20 rounded-xl">
+                                <div className="flex items-center gap-2 mb-1 text-amber-900 dark:text-amber-200">
+                                    <Settings className="h-3 w-3" />
+                                    <span className="text-[10px] font-black uppercase">Admin Tip (One-time fix)</span>
+                                </div>
+                                <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                                    To bypass this for all users: Open Supabase -> Auth -> Providers -> Email -> <strong>Turn OFF "Confirm email"</strong>.
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => { setErrorType(null); setView('login'); }}
+                            className="w-full py-4 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black text-xs uppercase tracking-widest shadow-xl"
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                ) : verificationSent ? (
                     <div className="text-center py-8 animate-in fade-in slide-in-from-bottom-4">
                         <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
                             <Mail className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Verify your email</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            We've sent a verification link to <span className="font-bold text-gray-800 dark:text-gray-200">{email}</span>.<br/>
-                            Please confirm your email to log in.
+                            Confirmation sent to <span className="font-bold text-gray-800 dark:text-gray-200">{email}</span>.
                         </p>
-                        <button 
-                            onClick={() => { setVerificationSent(false); setView('login'); }} 
-                            className="w-full py-3.5 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold hover:opacity-90 transition-opacity"
-                        >
-                            Back to Login
-                        </button>
+                        <button onClick={() => { setVerificationSent(false); setView('login'); }} className="w-full py-3.5 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold hover:opacity-90 transition-opacity">Back to Login</button>
                     </div>
                 ) : resetSent ? (
-                    /* Password Reset Sent State */
                     <div className="text-center py-8 animate-in fade-in slide-in-from-bottom-4">
                         <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Check your email</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">We've sent password reset instructions to your email.</p>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Email Sent</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Reset link dispatched successfully.</p>
                         <button onClick={() => { setResetSent(false); setView('login'); }} className="w-full py-3.5 mt-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold hover:opacity-90 transition-opacity">Return to Login</button>
                     </div>
                 ) : (
-                   /* Main Form */
                    <form onSubmit={handleSubmit} className="space-y-5">
                       {view === 'signup' && (
                           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -213,7 +224,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                                   <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 ml-1">Full Name</label>
                                   <div className="relative group">
                                     <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-university-accent transition-colors" />
-                                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full pl-12 p-3.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent dark:text-white transition-all text-sm font-medium" placeholder="John Doe" />
+                                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full pl-12 p-3.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent dark:text-white transition-all text-sm font-medium" placeholder="Ex: Rahul Kumar" />
                                   </div>
                               </div>
                               <div>
@@ -233,7 +244,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 ml-1">Email</label>
                           <div className="relative group">
                             <Mail className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-university-accent transition-colors" />
-                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 p-3.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent dark:text-white transition-all text-sm font-medium" placeholder="email@example.com" />
+                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 p-3.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent dark:text-white transition-all text-sm font-medium" placeholder="you@ranchiuniversity.ac.in" />
                           </div>
                       </div>
 
@@ -244,15 +255,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                                 <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-university-accent transition-colors" />
                                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 p-3.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-university-accent focus:ring-1 focus:ring-university-accent dark:text-white transition-all text-sm font-medium" placeholder="••••••••" />
                               </div>
-                              <p className="text-[10px] text-gray-400 mt-1 ml-1">Must be at least 6 characters.</p>
                           </div>
                       )}
 
                       {error && (
-                          <div className="text-red-600 dark:text-red-400 text-xs font-bold p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2 animate-in slide-in-from-top-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                              {error}
-                          </div>
+                        <div className="text-red-600 dark:text-red-400 text-[11px] font-bold p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2 animate-in slide-in-from-top-2">
+                            <ShieldAlert className="h-4 w-4 shrink-0" />
+                            {error}
+                        </div>
                       )}
 
                       <button type="submit" disabled={isLoading} className="w-full py-4 rounded-xl bg-university-900 dark:bg-university-accent hover:bg-black dark:hover:bg-amber-600 text-white font-bold shadow-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:scale-100">
@@ -261,15 +271,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
                    </form>
                 )}
 
-                {!verificationSent && !resetSent && (
+                {!verificationSent && !resetSent && !errorType && (
                     <div className="mt-8 text-center text-sm">
                         {view === 'login' ? (
                             <>
-                                <p className="text-gray-500 dark:text-gray-400">New here? <button onClick={() => setView('signup')} className="font-bold text-university-900 dark:text-white hover:underline">Create account</button></p>
-                                <button onClick={() => setView('forgot')} className="mt-2 text-xs font-bold text-university-accent hover:text-amber-700">Forgot Password?</button>
+                                <p className="text-gray-500 dark:text-gray-400">New student? <button onClick={() => setView('signup')} className="font-bold text-university-900 dark:text-white hover:underline">Register Now</button></p>
+                                <button onClick={() => setView('forgot')} className="mt-2 text-xs font-bold text-university-accent hover:text-amber-700">Lost password?</button>
                             </>
                         ) : (
-                            <p className="text-gray-500 dark:text-gray-400">Have an account? <button onClick={() => setView('login')} className="font-bold text-university-900 dark:text-white hover:underline">Log In</button></p>
+                            <p className="text-gray-500 dark:text-gray-400">Enrolled already? <button onClick={() => setView('login')} className="font-bold text-university-900 dark:text-white hover:underline">Log In</button></p>
                         )}
                     </div>
                 )}

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import Header from './components/Header.tsx';
 import Hero from './components/Hero.tsx';
@@ -23,11 +24,12 @@ import TermsOfService from './components/TermsOfService.tsx';
 import LoginModal from './components/LoginModal.tsx';
 import { ResourceType, CoursePattern, DegreeLevel, FilterState, User, Submission, Resource, AssessmentResult, LoginRecord } from './types.ts'; 
 import { SUBJECTS, COLLEGES } from './constants.ts';
-import { ChevronRight, Home, CalendarCheck, Info, Upload, ShieldCheck, ScrollText, PenTool, Loader2, History, Bookmark, CheckCircle, XCircle, User as UserIcon } from 'lucide-react';
+// Fixed: Added ArrowRight to the imports from lucide-react
+import { ChevronRight, Home, CalendarCheck, Info, Upload, ShieldCheck, ScrollText, PenTool, Loader2, History, Bookmark, CheckCircle, XCircle, User as UserIcon, Send, Sparkles, ArrowRight } from 'lucide-react';
 import { db } from './services/db.ts';
 import { supabase } from './services/supabase.ts';
 
-type ViewState = 'subjects' | 'patterns' | 'degrees' | 'colleges' | 'semesters' | 'resource-types' | 'list' | 'planner' | 'about' | 'submit' | 'admin' | 'terms' | 'assessments' | 'assessment-history' | 'profile';
+type ViewState = 'subjects' | 'patterns' | 'degrees' | 'colleges' | 'semesters' | 'resource-types' | 'list' | 'planner' | 'about' | 'submit' | 'admin' | 'terms' | 'assessments' | 'assessment-history' | 'profile' | 'order';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('subjects');
@@ -40,6 +42,9 @@ const App: React.FC = () => {
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   
+  // Order State
+  const [orderData, setOrderData] = useState({ subject: '', semester: '', details: '' });
+
   // UI State
   const [darkMode, setDarkMode] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -169,14 +174,6 @@ const App: React.FC = () => {
       showToast(isSaved ? "Removed from Liked Items" : "Added to Liked Items");
   };
 
-  const handleAddCredits = async (amount: number) => {
-    if (user) {
-      const updatedUser = { ...user, credits: (user.credits || 0) + amount };
-      setUser(updatedUser);
-      await db.saveUser(updatedUser);
-    }
-  };
-
   const handleAssessmentComplete = async (result: AssessmentResult) => {
     if (user) {
       const updatedHistory = [result, ...(user.assessmentHistory || [])];
@@ -188,6 +185,33 @@ const App: React.FC = () => {
       setUser(updatedUser);
       await db.saveUser(updatedUser);
       showToast("Assessment saved! +2 Credits earned");
+    }
+  };
+
+  const handleOrderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    if (!orderData.subject || !orderData.semester) {
+      showToast("Please fill all required fields", "error");
+      return;
+    }
+    try {
+      await db.createOrder({
+        userId: user.id,
+        email: user.identifier,
+        itemName: `Paper Request: ${orderData.subject}`,
+        subject: orderData.subject,
+        semester: orderData.semester,
+        details: orderData.details
+      });
+      showToast("Paper request (Order) submitted to Supabase!");
+      setOrderData({ subject: '', semester: '', details: '' });
+      setView('subjects');
+    } catch (err: any) {
+      showToast(err.message, "error");
     }
   };
 
@@ -214,12 +238,16 @@ const App: React.FC = () => {
         ...additional
     };
     
-    await db.addSubmission(newSubmission, file);
-    setSubmissions(prev => [...prev, newSubmission]);
-    showToast("Paper submitted successfully!");
+    try {
+        await db.addSubmission(newSubmission, file);
+        setSubmissions(prev => [...prev, newSubmission]);
+        showToast("Paper submitted successfully!");
+    } catch (err: any) {
+        showToast(err.message, "error");
+    }
   };
 
-  const handleApproveSubmission = async (id: string, watermarkedUrl?: string) => {
+  const handleApproveSubmission = async (id: string) => {
     const sub = submissions.find(s => s.id === id);
     if (!sub) return;
 
@@ -227,38 +255,19 @@ const App: React.FC = () => {
     setSubmissions(prev => prev.map(s => s.id === id ? updatedSub : s));
     await db.updateSubmission(updatedSub);
 
-    if (user && user.id === sub.userId) {
-       await handleAddCredits(5);
+    await handleAddCreditsToUser(sub.userId, 5);
+    showToast("Submission verified! 5 credits awarded.");
+  };
+
+  const handleAddCreditsToUser = async (userId: string, amount: number) => {
+    const targetProfile = await db.getUser(userId);
+    if (targetProfile) {
+      const updatedUser = { ...targetProfile, credits: (targetProfile.credits || 0) + amount };
+      await db.saveUser(updatedUser);
+      if (user && user.id === userId) {
+          setUser(updatedUser);
+      }
     }
-
-    const newRes: Resource = {
-        id: `res-${sub.id}`,
-        title: sub.fileName.replace('.pdf', ''),
-        collegeId: sub.collegeId || 'all',
-        subjectId: sub.subjectId,
-        semester: sub.semester,
-        year: new Date().getFullYear(),
-        type: sub.type,
-        pattern: sub.pattern || CoursePattern.NEP,
-        degreeLevel: sub.degreeLevel || DegreeLevel.UG,
-        downloadUrl: '', 
-        size: '1.5 MB', 
-        downloadCount: 0,
-        createdAt: Date.now()
-    };
-
-    if (watermarkedUrl) {
-        try {
-            const response = await fetch(watermarkedUrl);
-            const blob = await response.blob();
-            await db.saveFile(`res-${newRes.id}`, blob);
-        } catch (e) {
-            console.error("Failed to save watermarked file", e);
-        }
-    }
-
-    await db.addResource(newRes);
-    setAllResources(prev => [newRes, ...prev]);
   };
 
   const handleRejectSubmission = async (id: string) => {
@@ -354,6 +363,10 @@ const App: React.FC = () => {
       setView('submit');
       setActiveSubjectId(null);
       return;
+    }
+    if (sectionId === 'order') {
+        setView('order');
+        return;
     }
     if (sectionId === 'saved' || sectionId === 'profile') {
         if (!user) {
@@ -493,6 +506,14 @@ const App: React.FC = () => {
               </div>
             </>
           )}
+          {view === 'order' && (
+            <>
+              <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 mx-2" />
+              <div className="flex items-center font-bold text-university-900 dark:text-white">
+                <Send className="h-4 w-4 mr-1" /> Request Paper
+              </div>
+            </>
+          )}
           {view === 'profile' && (
             <>
               <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 mx-2" />
@@ -604,11 +625,19 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-[500px]">
             {view === 'subjects' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div id="subject-section" className="mb-8">
-                   <h2 className="text-2xl font-serif font-bold text-gray-900 dark:text-white">
-                      {activeResourceType ? `Browse Subjects for ${activeResourceType === ResourceType.PYQ ? 'Question Papers' : 'Lecture Notes'}` : 'Browse by Honors Subject'}
-                   </h2>
-                   <p className="text-gray-500 dark:text-gray-400 mt-1">Select your department to begin</p>
+                <div id="subject-section" className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                   <div>
+                      <h2 className="text-2xl font-serif font-bold text-gray-900 dark:text-white">
+                          {activeResourceType ? `Browse ${activeResourceType === ResourceType.PYQ ? 'Papers' : 'Notes'}` : 'Browse Honors Departments'}
+                      </h2>
+                      <p className="text-gray-500 dark:text-gray-400 mt-1">Select your honors paper to find study material.</p>
+                   </div>
+                   <button 
+                      onClick={() => setView('order')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-university-accent/10 text-university-accent font-bold text-sm hover:bg-university-accent hover:text-white transition-all shadow-sm"
+                   >
+                      <Send className="h-4 w-4" /> Request Missing Paper
+                   </button>
                 </div>
                 <SubjectGrid 
                   subjects={SUBJECTS} 
@@ -620,6 +649,60 @@ const App: React.FC = () => {
                   onToggleFavorite={handleToggleFavorite}
                 />
               </div>
+            )}
+
+            {view === 'order' && (
+                <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-10 shadow-2xl border border-gray-100 dark:border-slate-800">
+                        <div className="text-center mb-8">
+                            <div className="bg-university-accent/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <Send className="h-8 w-8 text-university-accent" />
+                            </div>
+                            <h2 className="text-3xl font-serif font-bold text-university-900 dark:text-white">Request Paper (Order)</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mt-2">Can't find a specific paper? Place an 'Order' request and we'll find it for you.</p>
+                        </div>
+                        <form onSubmit={handleOrderSubmit} className="space-y-6">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Honors Subject</label>
+                                <select 
+                                    className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border-none outline-none dark:text-white"
+                                    value={orderData.subject}
+                                    onChange={(e) => setOrderData({...orderData, subject: e.target.value})}
+                                >
+                                    <option value="">Select Subject</option>
+                                    {SUBJECTS.filter(s => s.id !== 'all').map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Semester</label>
+                                <select 
+                                    className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border-none outline-none dark:text-white"
+                                    value={orderData.semester}
+                                    onChange={(e) => setOrderData({...orderData, semester: e.target.value})}
+                                >
+                                    <option value="">Select Semester</option>
+                                    {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Additional Details (Year, Core Paper No.)</label>
+                                <textarea 
+                                    className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border-none outline-none dark:text-white min-h-[120px]"
+                                    placeholder="Ex: I need Core Paper 5 from year 2021..."
+                                    value={orderData.details}
+                                    onChange={(e) => setOrderData({...orderData, details: e.target.value})}
+                                />
+                            </div>
+                            <button 
+                                type="submit"
+                                className="w-full py-5 bg-university-900 hover:bg-black text-white font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 group"
+                            >
+                                <span>Place Request Order</span>
+                                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </form>
+                    </div>
+                </div>
             )}
 
             {view === 'planner' && <StudyPlanner />}
@@ -709,6 +792,7 @@ const App: React.FC = () => {
                     onLogin={handleLogin}
                     favorites={user?.savedResources || []}
                     onToggleFavorite={handleToggleFavorite}
+                    onNavigate={handleNavigation}
                   />
                </div>
             )}

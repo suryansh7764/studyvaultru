@@ -8,12 +8,18 @@ interface FooterProps {
 const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   const [showContactModal, setShowContactModal] = useState(false);
   const [logoError, setLogoError] = useState(false);
-  const [visitorCount, setVisitorCount] = useState(36248);
+  // Initial count between 12,000 and 15,000
+  const [visitorCount, setVisitorCount] = useState(() => Math.floor(Math.random() * (15000 - 12000 + 1)) + 12000);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setVisitorCount(prev => prev + Math.floor(Math.random() * 3));
-    }, 15000);
+      setVisitorCount(prev => {
+        // Keep it within the 12k-15.5k range naturally
+        const change = Math.floor(Math.random() * 5) - 1; 
+        const next = prev + change;
+        return next > 15500 ? 15000 : next < 12000 ? 12005 : next;
+      });
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -92,7 +98,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                </div>
                <div className="flex items-baseline gap-2">
                   <span className="text-sm font-bold text-white tabular-nums tracking-wider">{visitorCount.toLocaleString()}</span>
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Global Reach</span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Daily Visits</span>
                </div>
             </div>
           </div>
@@ -112,7 +118,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <div>
              <h4 className="text-xs font-bold uppercase tracking-[0.25em] text-university-accent mb-8">Platform</h4>
              <ul className="space-y-4 text-sm text-slate-400">
-                <li><button onClick={(e) => handleLinkClick(e, 'about')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Our Story</button></li>
+                <li><button onClick={(e) => handleLinkClick(e, 'about')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> About Us</button></li>
                 <li><button onClick={(e) => handleLinkClick(e, 'submit')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Contribute</button></li>
                 <li><button onClick={(e) => handleLinkClick(e, 'terms')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Terms of Use</button></li>
                 <li><button onClick={(e) => handleLinkClick(e, 'planner')} className="hover:text-white transition-colors flex items-center gap-2 group"><div className="h-1 w-1 bg-slate-700 rounded-full group-hover:bg-university-accent transition-colors"></div> Study Planner</button></li>
@@ -129,13 +135,6 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 <a href="#" className="p-3 rounded-2xl bg-white/5 hover:bg-university-accent text-slate-500 hover:text-white transition-all hover:-translate-y-1 shadow-lg"><Twitter className="h-5 w-5" /></a>
                 <a href="#" className="p-3 rounded-2xl bg-white/5 hover:bg-university-accent text-slate-500 hover:text-white transition-all hover:-translate-y-1 shadow-lg"><Facebook className="h-5 w-5" /></a>
              </div>
-             <div className="text-right">
-                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] mb-2">Designed With</p>
-                <div className="flex items-center justify-end gap-2 text-slate-400">
-                    <span className="text-xs font-medium">Passion for Education</span>
-                    <Heart className="h-4 w-4 text-red-500 fill-current" />
-                </div>
-             </div>
           </div>
         </div>
 
@@ -143,13 +142,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
            <div className="flex flex-col md:flex-row items-center gap-6">
               <p className="text-xs text-slate-500 font-medium tracking-wide">&copy; 2026 StudyVault. Ranchi University Academic Node.</p>
-              <div className="h-4 w-px bg-slate-800 hidden md:block"></div>
-              <div className="flex items-center gap-6 text-[10px] text-slate-600 font-bold uppercase tracking-[0.15em]">
-                 <span className="flex items-center gap-2 hover:text-slate-400 transition-colors cursor-pointer"><Globe className="h-3.5 w-3.5" /> RU Network</span>
-                 <span className="flex items-center gap-2 hover:text-slate-400 transition-colors cursor-pointer"><Activity className="h-3.5 w-3.5" /> System Health</span>
-              </div>
            </div>
-           <p className="text-[10px] text-slate-700 font-bold uppercase tracking-[0.2em]">Jharkhand Education Portals</p>
         </div>
       </div>
     </footer>

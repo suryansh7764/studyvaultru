@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Resource, ResourceType, StudyGoal, CoursePattern, DegreeLevel, User } from '../types';
-import { FileText, Download, Book, FileQuestion, CalendarPlus, X, Info, Heart, Sparkles } from 'lucide-react';
+import { FileText, Download, Book, FileQuestion, CalendarPlus, X, Info, Heart, Sparkles, Gift, Upload, ArrowRight } from 'lucide-react';
 import { db } from '../services/db';
 import LoginModal from './LoginModal';
 
@@ -12,6 +11,7 @@ interface ResourceListProps {
   onLogin: (uid: string, identifier: string, name: string, collegeId: string) => void;
   favorites?: string[]; // IDs passed from parent
   onToggleFavorite?: (id: string) => void;
+  onNavigate?: (section: string) => void;
 }
 
 const CARD_BG_COLORS = [
@@ -23,7 +23,7 @@ const CARD_BG_COLORS = [
   'bg-neutral-50'
 ];
 
-const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType, user, onLogin, favorites = [], onToggleFavorite }) => {
+const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType, user, onLogin, favorites = [], onToggleFavorite, onNavigate }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalGoalText, setModalGoalText] = useState('');
   const [modalDeadline, setModalDeadline] = useState('');
@@ -32,6 +32,9 @@ const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType
   // Login State
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [pendingDownloadId, setPendingDownloadId] = useState<string | null>(null);
+
+  // Post-Download Reward Prompt State
+  const [showRewardPrompt, setShowRewardPrompt] = useState(false);
 
   const handleAddToPlannerClick = (resource: Resource) => {
     setModalGoalText(`Finish ${resource.type === ResourceType.PYQ ? 'solving' : 'reading'} ${resource.title}`);
@@ -67,6 +70,7 @@ const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType
   const triggerDownload = async (id: string) => {
       if (id === 'sample-placeholder') {
           window.open('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', '_blank');
+          if (user?.isLoggedIn) setShowRewardPrompt(true);
           return;
       }
 
@@ -74,6 +78,10 @@ const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType
           const blobUrl = await db.getFileUrl(`res-${id}`);
           if (blobUrl) {
               window.open(blobUrl, '_blank');
+              // Show contribution prompt after download starts
+              if (user?.isLoggedIn) {
+                  setShowRewardPrompt(true);
+              }
           } else {
               alert("File not found in database.");
           }
@@ -238,6 +246,54 @@ const ResourceList: React.FC<ResourceListProps> = ({ resources, activeFilterType
             );
           })}
       </div>
+
+      {/* Post-Download Reward Prompt */}
+      {showRewardPrompt && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 w-full max-w-md border border-gray-200 dark:border-slate-800 shadow-2xl scale-100 animate-in zoom-in-95 duration-200 text-center relative overflow-hidden">
+             {/* Decorative Background Glow */}
+             <div className="absolute top-0 right-0 -mt-12 -mr-12 w-32 h-32 bg-university-accent/10 rounded-full blur-3xl"></div>
+             
+             <button 
+               onClick={() => setShowRewardPrompt(false)} 
+               className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+             >
+                <X className="h-6 w-6" />
+             </button>
+
+             <div className="w-24 h-24 bg-university-accent/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
+                <Gift className="h-12 w-12 text-university-accent" />
+             </div>
+
+             <h3 className="text-3xl font-serif font-bold text-university-900 dark:text-white mb-4">
+                Help Your Community!
+             </h3>
+             <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
+                You just downloaded a material! Consider <span className="font-bold text-university-accent">uploading your own papers or notes</span> to help other students and earn credits.
+             </p>
+
+             <div className="space-y-3">
+                <button 
+                  onClick={() => { setShowRewardPrompt(false); onNavigate?.('submit'); }}
+                  className="w-full py-4 rounded-2xl bg-university-accent hover:bg-amber-600 text-white font-bold shadow-lg shadow-amber-900/20 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95"
+                >
+                  <Upload className="h-5 w-5" /> Contribute & Earn
+                </button>
+                <button 
+                  onClick={() => setShowRewardPrompt(false)}
+                  className="w-full py-4 rounded-2xl bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 group"
+                >
+                  Maybe Later <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+             </div>
+
+             <div className="mt-8 pt-6 border-t border-gray-100 dark:border-slate-800 flex items-center justify-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                <Sparkles className="h-3 w-3 text-university-accent" />
+                <span>Gain 5 Credits per approved PDF</span>
+             </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">

@@ -4,11 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn("Supabase credentials missing. Check index.html shim or Netlify environment variables.");
+// Fallback logic to prevent "Failed to construct 'URL'" if values are missing
+let safeUrl = supabaseUrl;
+if (!supabaseUrl || supabaseUrl.includes('YOUR_NEW_SUPABASE')) {
+  safeUrl = 'https://sjptcgmjokirbgeuehhm.supabase.co'; // Force use your project URL as safety
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseKey || 'placeholder-key'
-);
+let safeKey = supabaseKey;
+if (!supabaseKey || supabaseKey.includes('YOUR_NEW_SUPABASE')) {
+  safeKey = 'sb_publishable_92_Sk36mczhLc5rTKlT4jA_9alIJCMf'; // Force use your project Key as safety
+}
+
+export const supabase = createClient(safeUrl, safeKey);

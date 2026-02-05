@@ -1,12 +1,13 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Submission, Resource, ResourceType, CoursePattern, DegreeLevel, LoginRecord } from '../types';
 import { 
   CheckCircle, XCircle, FileText, User as UserIcon, ShieldCheck, Mail, 
   Inbox, Archive, ArrowLeft, Paperclip, Check, X, LogOut, 
   LayoutDashboard, Users, Settings, Lock, Key, Loader2, 
   Stamp, FolderOpen, Trash2, Plus, Upload, Eye, Edit2, 
-  Save, ExternalLink, Activity, Smartphone, ShieldAlert, AlertCircle 
+  Save, ExternalLink, Activity, Smartphone, ShieldAlert, AlertCircle, Download, Clock, HardDrive, Database, Copy, Terminal,
+  ArrowRight
 } from 'lucide-react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { SUBJECTS, SEMESTERS, PATTERNS, DEGREE_LEVELS, COLLEGES } from '../constants';
@@ -16,7 +17,7 @@ interface AdminDashboardProps {
   submissions: Submission[];
   resources: Resource[];
   loginRecords: LoginRecord[];
-  onApprove: (id: string, watermarkedUrl?: string) => void;
+  onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onUpdateSubmission: (id: string, updates: Partial<Submission>) => void;
   onDeleteSubmission: (id: string) => void;
@@ -25,7 +26,7 @@ interface AdminDashboardProps {
   onExit: () => void;
 }
 
-type AdminView = 'dashboard' | 'inbox' | 'resources' | 'users' | 'activity' | 'settings';
+type AdminView = 'dashboard' | 'inbox' | 'resources' | 'users' | 'activity' | 'settings' | 'setup';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources, loginRecords, onApprove, onReject, onUpdateSubmission, onDeleteSubmission, onAddResource, onDeleteResource, onExit }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -35,9 +36,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
   const [error, setError] = useState('');
 
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
+  const [inboxStatusFilter, setInboxStatusFilter] = useState<'pending' | 'approved'>('pending');
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Health State
+  const [healthStatus, setHealthStatus] = useState<any>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
 
   // Manual Upload State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -58,7 +64,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
   const [confirmPwd, setConfirmPwd] = useState('');
   const [settingsMsg, setSettingsMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
 
-  const pendingSubmissions = submissions.filter(s => s.status === 'pending');
+  const filteredInboxSubmissions = submissions.filter(s => s.status === inboxStatusFilter);
+  const pendingCount = submissions.filter(s => s.status === 'pending').length;
   
   const uniqueUsers = Array.from(new Set(submissions.map(s => s.userIdentifier))).map((id: string) => {
       const userSubs = submissions.filter(s => s.userIdentifier === id);
@@ -70,6 +77,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
           lastActive: Math.max(...userSubs.map(s => s.timestamp))
       };
   });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+        checkSystemHealth();
+    }
+  }, [isAuthenticated]);
+
+  const checkSystemHealth = async () => {
+      setCheckingHealth(true);
+      const status = await db.checkSystemHealth();
+      setHealthStatus(status);
+      setCheckingHealth(false);
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,69 +106,129 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
     setEmail('');
     setPassword('');
     setActiveView('dashboard');
-    // Removed onExit() to stay on the login screen within the dashboard
   };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const applyWatermark = async (fileUrl: string, subId?: string): Promise<string> => {
-    try {
-        let pdfBytes: ArrayBuffer;
-        if (subId) {
-            // Retrieve file from DB if it's a submission
-            const fileBlob = await db.getFile(`sub-${subId}`);
-            if (fileBlob) {
-                pdfBytes = await fileBlob.arrayBuffer();
-            } else {
-                throw new Error("File not found in DB");
-            }
-        } else {
-            // It's a blob url from manual upload
-            pdfBytes = await fetch(fileUrl).then(res => res.arrayBuffer());
-        }
+  const MASTER_SQL = `-- 1. Create Tables (Safe)
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  email TEXT,
+  name TEXT,
+  college_id TEXT,
+  credits INTEGER DEFAULT 0,
+  assessment_history JSONB DEFAULT '[]',
+  saved_resources TEXT[] DEFAULT '{}'
+);
 
-        const pdfDoc = await PDFDocument.load(pdfBytes);
-        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const pages = pdfDoc.getPages();
-        const watermarkText = 'SURYAT';
-        const textSize = 50;
+CREATE TABLE IF NOT EXISTS resources (
+  id TEXT PRIMARY KEY,
+  title TEXT,
+  college_id TEXT,
+  subject_id TEXT,
+  semester INTEGER,
+  year INTEGER,
+  type TEXT,
+  pattern TEXT,
+  degree_level TEXT,
+  download_url TEXT,
+  size TEXT,
+  download_count INTEGER DEFAULT 0,
+  created_at BIGINT
+);
 
-        pages.forEach(page => {
-            const { width, height } = page.getSize();
-            const textWidth = font.widthOfTextAtSize(watermarkText, textSize);
-            const textHeight = font.heightAtSize(textSize);
-            page.drawText(watermarkText, {
-                x: width / 2 - textWidth / 2,
-                y: height / 2 - textHeight / 2,
-                size: textSize,
-                font: font,
-                color: rgb(0.95, 0.1, 0.1),
-                opacity: 0.3,
-                rotate: degrees(45),
-            });
-        });
+CREATE TABLE IF NOT EXISTS submissions (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  user_identifier TEXT,
+  file_name TEXT,
+  file_path TEXT,
+  subject_id TEXT,
+  subject_name TEXT,
+  semester INTEGER,
+  type TEXT,
+  status TEXT DEFAULT 'pending',
+  timestamp BIGINT,
+  credits_earned INTEGER DEFAULT 0,
+  pattern TEXT,
+  degree_level TEXT,
+  college_id TEXT
+);
 
-        const modifiedPdfBytes = await pdfDoc.save();
-        const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
-        return URL.createObjectURL(blob);
-    } catch (error) {
-        console.error("Error applying watermark:", error);
-        return fileUrl;
-    }
+CREATE TABLE IF NOT EXISTS orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id),
+  email TEXT,
+  item_name TEXT,
+  subject TEXT,
+  semester TEXT,
+  details TEXT,
+  status TEXT DEFAULT 'pending',
+  timestamp BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS login_history (
+  id TEXT PRIMARY KEY,
+  identifier TEXT,
+  timestamp BIGINT,
+  method TEXT
+);
+
+-- 2. Enable RLS (Safe to re-run)
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+
+-- 3. Cleanup & Create Policies (Prevents 'Policy already exists' errors)
+
+-- Profiles Policies
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON profiles;
+CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Resources Policies
+DROP POLICY IF EXISTS "Resources are public" ON resources;
+CREATE POLICY "Resources are public" ON resources FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin can modify resources" ON resources;
+CREATE POLICY "Admin can modify resources" ON resources FOR ALL USING (auth.jwt()->>'email' = 'suryanshkishor@gmail.com');
+
+-- Submissions Policies
+DROP POLICY IF EXISTS "Anyone can submit papers" ON submissions;
+CREATE POLICY "Anyone can submit papers" ON submissions FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can view submissions" ON submissions;
+CREATE POLICY "Anyone can view submissions" ON submissions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin can update submissions" ON submissions;
+CREATE POLICY "Admin can update submissions" ON submissions FOR UPDATE USING (auth.jwt()->>'email' = 'suryanshkishor@gmail.com');
+
+-- Storage Policies (Buckets must be created manually first)
+DROP POLICY IF EXISTS "Storage - Allow Public Uploads" ON storage.objects;
+CREATE POLICY "Storage - Allow Public Uploads" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('resources', 'submissions'));
+
+DROP POLICY IF EXISTS "Storage - Allow Public Access" ON storage.objects;
+CREATE POLICY "Storage - Allow Public Access" ON storage.objects FOR SELECT USING (bucket_id IN ('resources', 'submissions'));
+`;
+
+  const copySql = () => {
+    navigator.clipboard.writeText(MASTER_SQL);
+    showToast("SQL Script Copied to Clipboard!");
   };
 
-  const handleEmailAction = async (id: string, action: 'approve' | 'reject') => {
+  const handleSubmissionAction = async (id: string, action: 'approve' | 'reject') => {
     if (action === 'approve') {
        setIsProcessing(id);
-       // Fetch original file, watermark it, and pass URL to App which will save to DB
-       const finalUrl = await applyWatermark('', id); // Pass id to fetch from DB
-       onApprove(id, finalUrl);
+       await onApprove(id);
        setIsProcessing(null);
        setSelectedSubmissionId(null);
-       showToast("Document Approved & Credits Awarded.");
+       showToast("Student Rewarded. Verification Complete.");
     } else {
        onReject(id);
        setSelectedSubmissionId(null);
@@ -156,36 +236,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
     }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSettingsMsg(null);
-    if (currentPwd !== adminPassword) {
-        setSettingsMsg({type: 'error', text: 'Current password is incorrect.'});
-        return;
-    }
-    if (newPwd.length < 4) {
-         setSettingsMsg({type: 'error', text: 'New password must be at least 4 characters long.'});
-         return;
-    }
-    if (newPwd !== confirmPwd) {
-        setSettingsMsg({type: 'error', text: 'New passwords do not match.'});
-        return;
-    }
-    setAdminPassword(newPwd);
-    setSettingsMsg({type: 'success', text: 'Password updated successfully.'});
-    setCurrentPwd('');
-    setNewPwd('');
-    setConfirmPwd('');
-  };
-
   const handleDeleteResourceAction = (id: string) => {
-      if(window.confirm("Are you sure you want to delete this resource?")) {
+      if(window.confirm("Are you sure you want to delete this resource permanently?")) {
           onDeleteResource(id);
-          showToast("Resource deleted successfully.");
+          showToast("Resource removed from Library.");
       }
   };
 
-  // Upload Logic Handlers
   const handleUploadDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -205,51 +262,95 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
   const handleUploadFile = (file: File) => {
     if (file.type === "application/pdf") {
       setUploadFile(file);
-      // Auto-set title from filename if empty
       if (!uploadTitle) setUploadTitle(file.name.replace('.pdf', ''));
     } else {
       alert("Please upload a PDF file.");
     }
   };
 
+  const applyWatermark = async (fileUrl: string): Promise<string> => {
+    try {
+        const pdfBytes = await fetch(fileUrl).then(res => res.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const pages = pdfDoc.getPages();
+        const watermarkText = 'STUDYVAULT';
+        const textSize = 50;
+
+        pages.forEach(page => {
+            const { width, height } = page.getSize();
+            const textWidth = font.widthOfTextAtSize(watermarkText, textSize);
+            page.drawText(watermarkText, {
+                x: width / 2 - textWidth / 2,
+                y: height / 2 - 50,
+                size: textSize,
+                font: font,
+                color: rgb(0.9, 0.1, 0.1),
+                opacity: 0.1,
+                rotate: degrees(45),
+            });
+        });
+
+        const modifiedPdfBytes = await pdfDoc.save();
+        const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+        return URL.createObjectURL(blob);
+    } catch (e) {
+        console.error("Watermark failed", e);
+        return fileUrl;
+    }
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !uploadSubject || !uploadSemester || !uploadType || !uploadTitle || !uploadPattern || !uploadDegree || !uploadCollege) {
-        alert("Please fill all fields.");
+        alert("All metadata fields are mandatory.");
         return;
     }
     
     setIsProcessing('upload');
-    const tempUrl = URL.createObjectURL(uploadFile);
-    // Note: applyWatermark returns a Blob URL
-    const finalUrl = await applyWatermark(tempUrl);
-    
-    const newResource: Resource = {
-        id: `admin-up-${Date.now()}`,
-        title: uploadTitle,
-        collegeId: uploadCollege,
-        subjectId: uploadSubject,
-        semester: parseInt(uploadSemester),
-        year: new Date().getFullYear(),
-        type: uploadType as ResourceType,
-        pattern: uploadPattern as CoursePattern,
-        degreeLevel: uploadDegree as DegreeLevel,
-        downloadUrl: '', // Will be handled by save
-        size: `${(uploadFile.size / 1024 / 1024).toFixed(2)} MB`,
-        downloadCount: 0,
-        createdAt: Date.now()
-    };
-    
-    // Save file blob to DB using the resource ID
-    const response = await fetch(finalUrl);
-    const blob = await response.blob();
-    await db.saveFile(`res-${newResource.id}`, blob);
+    try {
+        const tempUrl = URL.createObjectURL(uploadFile);
+        const finalUrl = await applyWatermark(tempUrl);
+        const response = await fetch(finalUrl);
+        const blob = await response.blob();
+        
+        const resourceId = `admin-up-${Date.now()}`;
+        const publicUrl = await db.saveFile(resourceId, blob);
+        
+        if (!publicUrl) {
+            throw new Error("Storage upload failed. Check if 'resources' bucket exists.");
+        }
 
-    onAddResource(newResource);
-    setIsProcessing(null);
-    setIsUploadModalOpen(false);
-    
-    // Reset state
+        const newResource: Resource = {
+            id: resourceId,
+            title: uploadTitle,
+            collegeId: uploadCollege,
+            subjectId: uploadSubject,
+            semester: parseInt(uploadSemester),
+            year: new Date().getFullYear(),
+            type: uploadType as ResourceType,
+            pattern: uploadPattern as CoursePattern,
+            degreeLevel: uploadDegree as DegreeLevel,
+            downloadUrl: publicUrl,
+            size: `${(uploadFile.size / 1024 / 1024).toFixed(2)} MB`,
+            downloadCount: 0,
+            createdAt: Date.now()
+        };
+
+        await onAddResource(newResource);
+        
+        showToast("Success! Published to public library.");
+        setIsUploadModalOpen(false);
+        resetForm();
+    } catch (err: any) {
+        console.error(err);
+        alert(`Failed to publish: ${err.message}`);
+    } finally {
+        setIsProcessing(null);
+    }
+  };
+
+  const resetForm = () => {
     setUploadFile(null);
     setUploadTitle('');
     setUploadSubject('');
@@ -258,8 +359,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
     setUploadPattern('');
     setUploadDegree('');
     setUploadCollege('');
-    
-    showToast("Resource published successfully.");
+  };
+
+  const handleReviewDownload = async (subId: string) => {
+      const url = await db.getFileUrl(`sub-${subId}`);
+      if (url) {
+          window.open(url, '_blank');
+      } else {
+          alert("File link missing.");
+      }
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsMsg(null);
+
+    if (currentPwd !== adminPassword) {
+      setSettingsMsg({ type: 'error', text: 'Current password is incorrect.' });
+      return;
+    }
+    if (newPwd.length < 4) {
+      setSettingsMsg({ type: 'error', text: 'Minimum 4 characters required.' });
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setSettingsMsg({ type: 'error', text: 'Passwords do not match.' });
+      return;
+    }
+
+    setAdminPassword(newPwd);
+    setSettingsMsg({ type: 'success', text: 'Password changed.' });
+    setCurrentPwd('');
+    setNewPwd('');
+    setConfirmPwd('');
   };
 
   if (!isAuthenticated) {
@@ -271,13 +403,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
             <div className="w-20 h-20 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-6 backdrop-blur-xl border border-white/10">
                <ShieldCheck className="h-10 w-10 text-university-accent" />
             </div>
-            <h2 className="text-3xl font-serif font-bold text-white tracking-tight">Admin Portal</h2>
-            <p className="text-slate-400 text-sm mt-2 font-medium">Authentication Required</p>
+            <h2 className="text-3xl font-serif font-bold text-white tracking-tight">Admin Console</h2>
+            <p className="text-slate-400 text-sm mt-2 font-medium">Verify Identity</p>
           </div>
           
           <form onSubmit={handleLogin} className="p-10 space-y-6">
             <div>
-               <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Administrator Email</label>
+               <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Admin Email</label>
                <input 
                  type="email" 
                  value={email}
@@ -287,7 +419,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                />
             </div>
             <div>
-               <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Passcode</label>
+               <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Secret Key</label>
                <input 
                  type="password" 
                  value={password}
@@ -307,7 +439,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
               type="submit"
               className="w-full bg-university-900 hover:bg-black text-white font-bold py-4 rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 group"
             >
-              <Lock className="h-4 w-4 group-hover:scale-110 transition-transform" /> Access Dashboard
+              <Lock className="h-4 w-4 group-hover:scale-110 transition-transform" /> Sign In
             </button>
             
             <button 
@@ -315,7 +447,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                 onClick={onExit}
                 className="w-full text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 uppercase tracking-widest"
             >
-                Return to Site
+                Back to Site
             </button>
           </form>
         </div>
@@ -326,7 +458,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex relative transition-colors">
       
-      {/* Toast Notification */}
       {toastMessage && (
          <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-4 fade-in">
              <div className="bg-university-900 text-white px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 border border-white/10 backdrop-blur-xl">
@@ -336,7 +467,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
          </div>
       )}
 
-      {/* Manual Upload Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 w-full max-w-2xl shadow-2xl border border-gray-200 dark:border-slate-800 scale-100 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
@@ -353,7 +483,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
               </div>
 
               <form onSubmit={handleUploadSubmit} className="space-y-6">
-                 {/* Drag and Drop */}
                  <div 
                    onDragEnter={handleUploadDrag} 
                    onDragOver={handleUploadDrag} 
@@ -382,7 +511,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                     )}
                  </div>
 
-                 {/* Title */}
                  <div>
                     <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Resource Display Title</label>
                     <input 
@@ -394,7 +522,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                     />
                  </div>
 
-                 {/* Dropdown Grid */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Select College</label>
@@ -449,14 +576,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                     disabled={isProcessing === 'upload' || !uploadFile}
                     className="w-full py-5 bg-university-900 hover:bg-black text-white font-bold rounded-2xl shadow-xl shadow-university-900/20 flex items-center justify-center gap-3 transition-all disabled:opacity-50"
                  >
-                    {isProcessing === 'upload' ? <><Loader2 className="h-5 w-5 animate-spin" /> Publishing Resource...</> : <><Stamp className="h-5 w-5" /> Authenticate & Publish to Site</>}
+                    {isProcessing === 'upload' ? <><Loader2 className="h-5 w-5 animate-spin" /> Watermarking & Uploading...</> : <><Stamp className="h-5 w-5" /> Authenticate & Publish</>}
                  </button>
               </form>
            </div>
         </div>
       )}
 
-      {/* Sidebar Navigation */}
       <aside className="w-72 bg-university-900 text-white flex flex-col fixed inset-y-0 left-0 z-50 border-r border-white/5">
          <div className="p-8 flex items-center gap-4 border-b border-white/5">
             <div className="bg-university-accent p-2 rounded-xl shadow-lg shadow-university-accent/20">
@@ -470,10 +596,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
          
          <nav className="flex-1 p-6 space-y-3">
             <SidebarItem icon={<LayoutDashboard />} label="Summary" active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
-            <SidebarItem icon={<Inbox />} label="Submission Inbox" active={activeView === 'inbox'} onClick={() => setActiveView('inbox')} badge={pendingSubmissions.length} />
+            <SidebarItem icon={<Inbox />} label="Submission Inbox" active={activeView === 'inbox'} onClick={() => setActiveView('inbox')} badge={pendingCount} />
             <SidebarItem icon={<FolderOpen />} label="Manage Library" active={activeView === 'resources'} onClick={() => setActiveView('resources')} />
             <SidebarItem icon={<Users />} label="Student Base" active={activeView === 'users'} onClick={() => setActiveView('users')} />
             <SidebarItem icon={<Activity />} label="Security Logs" active={activeView === 'activity'} onClick={() => setActiveView('activity')} />
+            <SidebarItem icon={<Terminal />} label="Infrastructure Setup" active={activeView === 'setup'} onClick={() => setActiveView('setup')} />
             <SidebarItem icon={<Settings />} label="System Config" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
          </nav>
          
@@ -494,17 +621,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
          </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 ml-72 p-12 overflow-y-auto">
          {activeView === 'dashboard' && (
             <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-               <div className="mb-12">
-                   <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Admin Summary</h1>
-                   <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Status of system-wide operations</p>
+               <div className="mb-12 flex justify-between items-start">
+                   <div>
+                       <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Admin Summary</h1>
+                       <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Status of system-wide operations</p>
+                   </div>
+                   <button 
+                    onClick={checkSystemHealth}
+                    className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 text-slate-500 hover:text-university-accent transition-all"
+                    title="Refresh System Health"
+                   >
+                     <Activity className={`h-5 w-5 ${checkingHealth ? 'animate-pulse text-university-accent' : ''}`} />
+                   </button>
                </div>
                
+               {/* Health Alert Section */}
+               {healthStatus && (
+                   <div className="mb-12 p-8 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 shadow-xl overflow-hidden relative">
+                       <div className="flex items-center gap-4 mb-8">
+                           <div className="p-3 rounded-2xl bg-university-accent/10 text-university-accent">
+                               <ShieldAlert className="h-6 w-6" />
+                           </div>
+                           <h3 className="text-xl font-serif font-bold text-slate-900 dark:text-white">Supabase Infrastructure Health</h3>
+                       </div>
+
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                           <HealthPill label="Storage: resources" status={healthStatus.resourcesBucket} type="bucket" />
+                           <HealthPill label="Storage: submissions" status={healthStatus.submissionsBucket} type="bucket" />
+                           <HealthPill label="Table: profiles" status={healthStatus.profilesTable} type="table" />
+                           <HealthPill label="Table: resources" status={healthStatus.resourcesTable} type="table" />
+                           <HealthPill label="Table: submissions" status={healthStatus.submissionsTable} type="table" />
+                           <HealthPill label="Table: orders" status={healthStatus.ordersTable} type="table" />
+                       </div>
+
+                       {Object.values(healthStatus).some(v => v === false) && (
+                           <div className="mt-8 p-6 bg-amber-50 dark:bg-amber-900/10 border-2 border-dashed border-amber-200 dark:border-amber-900/30 rounded-3xl flex items-start gap-4">
+                               <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400 mt-1 shrink-0" />
+                               <div>
+                                   <p className="text-sm font-black text-amber-900 dark:text-amber-200 uppercase tracking-widest">Configuration Required</p>
+                                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 leading-relaxed">
+                                       Some database components or storage buckets are missing. You can fix this instantly using our <strong>Setup SQL Generator</strong>.
+                                   </p>
+                                   <button 
+                                      onClick={() => setActiveView('setup')}
+                                      className="inline-flex items-center gap-2 mt-4 px-6 py-2.5 bg-university-900 text-white rounded-xl text-xs font-bold shadow-lg transition-all hover:scale-105"
+                                   >
+                                       Go to Setup Tool <ArrowRight className="h-3 w-3" />
+                                   </button>
+                               </div>
+                           </div>
+                       )}
+                   </div>
+               )}
+
                <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
-                  <StatCard label="Review Queue" value={pendingSubmissions.length} icon={<Inbox className="text-blue-500" />} onClick={() => setActiveView('inbox')} />
+                  <StatCard label="Review Queue" value={pendingCount} icon={<Inbox className="text-blue-500" />} onClick={() => setActiveView('inbox')} />
                   <StatCard label="Total PDFs" value={resources.length} icon={<FileText className="text-amber-500" />} onClick={() => setActiveView('resources')} />
                   <StatCard label="Total Students" value={uniqueUsers.length} icon={<Users className="text-purple-500" />} onClick={() => setActiveView('users')} />
                   <StatCard label="Recent Logins" value={loginRecords.length} icon={<Activity className="text-green-500" />} onClick={() => setActiveView('activity')} />
@@ -534,7 +708,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                        sub.status === 'rejected' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' :
                                        'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
                                     }`}>
-                                       {sub.status}
+                                       {sub.status === 'approved' ? 'Verified' : sub.status}
                                     </span>
                                  </td>
                               </tr>
@@ -546,37 +720,156 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
             </div>
          )}
 
-         {/* Inbox View */}
+         {activeView === 'setup' && (
+            <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
+               <div className="mb-10">
+                   <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Infrastructure Setup</h1>
+                   <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Fix all database, storage, and permission issues at once.</p>
+               </div>
+
+               <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-slate-800 p-10">
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                       <div className="space-y-8">
+                           <div>
+                               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                                   <Terminal className="h-6 w-6 text-university-accent" />
+                                   Database Setup SQL
+                               </h3>
+                               <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                                   This script will create all required tables (<code className="text-xs bg-gray-100 dark:bg-slate-800 px-1 rounded">resources</code>, <code className="text-xs bg-gray-100 dark:bg-slate-800 px-1 rounded">submissions</code>, etc.) and set up <strong>Row Level Security (RLS)</strong> policies so files can be uploaded.
+                               </p>
+                               <div className="bg-slate-950 rounded-2xl p-6 relative group overflow-hidden">
+                                   <pre className="text-[10px] text-emerald-400 overflow-x-auto h-64 no-scrollbar opacity-60 group-hover:opacity-100 transition-opacity">
+                                       {MASTER_SQL}
+                                   </pre>
+                                   <button 
+                                      onClick={copySql}
+                                      className="absolute top-4 right-4 bg-university-accent text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                                   >
+                                       <Copy className="h-4 w-4" /> Copy SQL
+                                   </button>
+                               </div>
+                           </div>
+
+                           <div className="p-6 bg-blue-50 dark:bg-blue-900/10 border-2 border-dashed border-blue-200 dark:border-blue-900/30 rounded-3xl">
+                               <h4 className="font-black text-[10px] text-blue-900 dark:text-blue-200 uppercase tracking-widest mb-3">How to use:</h4>
+                               <ol className="text-xs text-blue-800 dark:text-blue-300 space-y-2">
+                                   <li>1. Click <strong>Copy SQL</strong> above.</li>
+                                   <li>2. Open your <a href="https://supabase.com/dashboard/project/sjptcgmjokirbgeuehhm/sql/new" target="_blank" className="underline font-bold">Supabase SQL Editor</a>.</li>
+                                   <li>3. Paste the code and click <strong>Run</strong>.</li>
+                               </ol>
+                           </div>
+                       </div>
+
+                       <div className="space-y-8">
+                           <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                               <HardDrive className="h-6 w-6 text-university-accent" />
+                               Storage Bucket Setup
+                           </h3>
+                           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                               Supabase SQL doesn't create buckets automatically. You must create them manually in the Dashboard.
+                           </p>
+
+                           <div className="space-y-4">
+                               <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                                   <div className="flex items-center gap-4">
+                                       <div className={`p-2 rounded-lg ${healthStatus?.resourcesBucket ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                           <FolderOpen className="h-5 w-5" />
+                                       </div>
+                                       <div>
+                                           <p className="font-bold text-slate-900 dark:text-white">resources</p>
+                                           <p className="text-[10px] text-slate-400 uppercase font-black">Material Library</p>
+                                       </div>
+                                   </div>
+                                   {healthStatus?.resourcesBucket ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                               </div>
+
+                               <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                                   <div className="flex items-center gap-4">
+                                       <div className={`p-2 rounded-lg ${healthStatus?.submissionsBucket ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                           <Upload className="h-5 w-5" />
+                                       </div>
+                                       <div>
+                                           <p className="font-bold text-slate-900 dark:text-white">submissions</p>
+                                           <p className="text-[10px] text-slate-400 uppercase font-black">Student Uploads</p>
+                                       </div>
+                                   </div>
+                                   {healthStatus?.submissionsBucket ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                               </div>
+                           </div>
+
+                           <div className="p-8 bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-200 dark:border-amber-900/30 rounded-3xl">
+                               <h4 className="font-black text-[10px] text-amber-900 dark:text-amber-200 uppercase tracking-widest mb-4">Mandatory Storage Settings:</h4>
+                               <ul className="text-xs text-amber-800 dark:text-amber-300 space-y-3">
+                                   <li className="flex gap-2">
+                                       <div className="w-4 h-4 rounded bg-amber-200 text-amber-800 flex items-center justify-center font-bold text-[8px] shrink-0">1</div>
+                                       <span>Create both buckets named exactly as above.</span>
+                                   </li>
+                                   <li className="flex gap-2">
+                                       <div className="w-4 h-4 rounded bg-amber-200 text-amber-800 flex items-center justify-center font-bold text-[8px] shrink-0">2</div>
+                                       <span>Set <strong>"Public bucket"</strong> to <strong className="text-amber-900">ON</strong> for both.</span>
+                                   </li>
+                               </ul>
+                               <a 
+                                  href="https://supabase.com/dashboard/project/sjptcgmjokirbgeuehhm/storage" 
+                                  target="_blank"
+                                  className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-amber-600 text-white rounded-xl text-xs font-bold shadow-lg hover:bg-amber-700 transition-all"
+                               >
+                                   Open Storage Dashboard <ExternalLink className="h-3 w-3" />
+                               </a>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+            </div>
+         )}
+
          {activeView === 'inbox' && (
             <div className="h-[calc(100vh-8rem)] flex flex-col animate-in fade-in duration-500">
-               <div className="mb-10">
-                  <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Review Inbox</h1>
-                  <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Moderation queue for community uploads</p>
+               <div className="flex justify-between items-end mb-10">
+                  <div>
+                    <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Review Inbox</h1>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Reward students for their contributions</p>
+                  </div>
+                  
+                  <div className="flex bg-gray-200 dark:bg-slate-800 p-1 rounded-2xl border border-gray-300 dark:border-slate-700">
+                      <button 
+                         onClick={() => { setInboxStatusFilter('pending'); setSelectedSubmissionId(null); }}
+                         className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${inboxStatusFilter === 'pending' ? 'bg-white dark:bg-slate-700 text-university-900 dark:text-white shadow-lg' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                      >
+                         <Clock className="h-4 w-4" /> Pending Review
+                      </button>
+                      <button 
+                         onClick={() => { setInboxStatusFilter('approved'); setSelectedSubmissionId(null); }}
+                         className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${inboxStatusFilter === 'approved' ? 'bg-white dark:bg-slate-700 text-university-900 dark:text-white shadow-lg' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                      >
+                         <CheckCircle className="h-4 w-4" /> Verified (Unpublished)
+                      </button>
+                  </div>
                </div>
                
                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden flex-1 flex">
-                  {/* ... Sidebar of inbox ... */}
                   <div className={`w-1/3 border-r border-gray-100 dark:border-white/5 flex flex-col bg-gray-50/50 dark:bg-slate-900/50 ${selectedSubmissionId ? 'hidden md:flex' : 'flex'}`}>
                       <div className="p-6 border-b border-gray-100 dark:border-white/5 bg-white dark:bg-slate-900 flex justify-between items-center">
-                          <span className="font-bold text-slate-900 dark:text-white uppercase tracking-widest text-xs">Unresolved Tasks</span>
-                          <span className="bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-bold">{pendingSubmissions.length}</span>
+                          <span className="font-bold text-slate-900 dark:text-white uppercase tracking-widest text-xs">Queue</span>
+                          <span className="bg-university-accent text-white px-3 py-1 rounded-full text-[10px] font-bold">{filteredInboxSubmissions.length}</span>
                       </div>
                       <div className="flex-1 overflow-y-auto">
-                         {pendingSubmissions.length === 0 ? (
+                         {filteredInboxSubmissions.length === 0 ? (
                             <div className="p-20 text-center text-slate-300">
                                <Inbox className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                               <p className="font-serif text-xl">Zero Pending</p>
+                               <p className="font-serif text-xl">Inbox is Empty</p>
                             </div>
                          ) : (
-                            pendingSubmissions.map(sub => (
+                            filteredInboxSubmissions.map(sub => (
                                <button
                                   key={sub.id}
                                   onClick={() => setSelectedSubmissionId(sub.id)}
                                   className={`w-full text-left p-6 border-b border-gray-100 dark:border-white/5 hover:bg-white dark:hover:bg-slate-800 transition-all ${selectedSubmissionId === sub.id ? 'bg-white dark:bg-slate-800 border-l-8 border-l-university-accent shadow-2xl z-10' : 'border-l-8 border-l-transparent'}`}
                                >
                                   <div className="flex justify-between items-start mb-2">
-                                      <span className="font-bold text-[10px] uppercase tracking-widest text-slate-400">Incoming Data</span>
-                                      <span className="text-[10px] font-bold text-slate-400">{new Date(sub.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                      <span className="font-bold text-[10px] uppercase tracking-widest text-slate-400">Submission</span>
+                                      <span className="text-[10px] font-bold text-slate-400">{new Date(sub.timestamp).toLocaleDateString()}</span>
                                   </div>
                                   <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">{sub.fileName}</h4>
                                   <p className="text-xs text-slate-500 font-medium truncate">By: {sub.userIdentifier}</p>
@@ -589,7 +882,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                   <div className={`w-2/3 flex flex-col bg-white dark:bg-slate-900 ${!selectedSubmissionId ? 'hidden md:flex' : 'flex'}`}>
                      {selectedSubmissionId ? (
                         (() => {
-                           const activeSub = pendingSubmissions.find(s => s.id === selectedSubmissionId);
+                           const activeSub = submissions.find(s => s.id === selectedSubmissionId);
                            if (!activeSub) return null;
                            return (
                               <div className="flex flex-col h-full animate-in fade-in duration-500">
@@ -597,77 +890,103 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                     <button onClick={() => setSelectedSubmissionId(null)} className="md:hidden p-3 hover:bg-gray-100 rounded-2xl">
                                        <ArrowLeft className="h-6 w-6" />
                                     </button>
-                                    <div className="flex gap-3">
-                                       <div className="h-3 w-3 rounded-full bg-slate-200 dark:bg-slate-800"></div>
-                                       <div className="h-3 w-3 rounded-full bg-slate-200 dark:bg-slate-800"></div>
-                                       <div className="h-3 w-3 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                                    <div className="flex gap-2">
+                                       <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${activeSub.status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 border-amber-200' : 'bg-green-50 dark:bg-green-900/20 text-green-600 border-green-200'}`}>
+                                          {activeSub.status === 'pending' ? 'Verification Required' : 'Verified & Credited'}
+                                       </div>
                                     </div>
                                  </div>
 
                                  <div className="flex-1 overflow-y-auto p-12">
-                                    <h2 className="text-3xl font-serif font-bold mb-10 text-slate-900 dark:text-white">Moderate Submission</h2>
-                                    
                                     <div className="flex items-center gap-6 mb-12">
                                        <div className="h-16 w-16 rounded-[1.5rem] bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl shadow-xl">S</div>
                                        <div>
-                                          <p className="text-lg font-bold text-slate-900 dark:text-white">Validation Engine</p>
-                                          <p className="text-sm text-slate-500 font-medium">Source: {activeSub.userIdentifier}</p>
+                                          <p className="text-lg font-bold text-slate-900 dark:text-white">{activeSub.fileName}</p>
+                                          <p className="text-sm text-slate-500 font-medium">Uploader: {activeSub.userIdentifier}</p>
                                        </div>
                                        <span className="ml-auto text-xs font-bold text-slate-400 uppercase tracking-widest">{new Date(activeSub.timestamp).toLocaleString()}</span>
                                     </div>
 
                                     <div className="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-400">
-                                       {/* Metadata Grid */}
                                        <div className="grid grid-cols-2 gap-8 mb-12">
                                           <div className="bg-gray-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-gray-100 dark:border-white/5">
-                                             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] block mb-2">Subject Header</span>
+                                             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] block mb-2">Department</span>
                                              <span className="font-bold text-lg text-slate-900 dark:text-white">{activeSub.subjectName}</span>
                                           </div>
                                           <div className="bg-gray-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-gray-100 dark:border-white/5">
-                                             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] block mb-2">Target Segment</span>
+                                             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] block mb-2">Category</span>
                                              <span className="font-bold text-lg text-slate-900 dark:text-white">Semester {activeSub.semester} &bull; {activeSub.type}</span>
                                           </div>
                                        </div>
 
-                                       <h4 className="font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-widest text-xs">Attachment Preview</h4>
-                                       <button 
-                                          onClick={async () => {
-                                              const url = await db.getFileUrl(`sub-${activeSub.id}`);
-                                              if (url) window.open(url, '_blank');
-                                              else alert("File not found in DB");
-                                          }}
-                                          className="w-full flex items-center gap-6 p-6 border-2 border-gray-100 dark:border-white/5 rounded-3xl group hover:border-university-accent transition-all mb-12 text-left"
-                                       >
-                                           <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-2xl group-hover:scale-110 transition-transform">
-                                              <FileText className="h-10 w-10 text-red-600 dark:text-red-400" />
-                                           </div>
-                                           <div>
-                                              <p className="font-bold text-lg text-slate-900 dark:text-white">{activeSub.fileName}</p>
-                                              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Click to View Secured PDF</p>
-                                           </div>
-                                           <ExternalLink className="h-6 w-6 ml-auto text-slate-300 group-hover:text-university-accent transition-colors" />
-                                       </button>
-                                       
-                                       <div className="flex gap-6">
+                                       <h4 className="font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-widest text-xs">Review & Download</h4>
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
                                           <button 
-                                             onClick={() => handleEmailAction(activeSub.id, 'approve')}
-                                             disabled={isProcessing === activeSub.id}
-                                             className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-5 rounded-[1.5rem] font-bold flex items-center justify-center gap-3 transition-all shadow-2xl shadow-green-500/20"
+                                              onClick={() => handleReviewDownload(activeSub.id)}
+                                              className="flex items-center gap-6 p-6 border-2 border-university-accent/20 bg-university-accent/5 rounded-3xl group hover:border-university-accent transition-all text-left"
                                           >
-                                             {isProcessing === activeSub.id ? (
-                                                <><Loader2 className="h-5 w-5 animate-spin" /> Watermarking...</>
-                                             ) : (
-                                                <><Stamp className="h-5 w-5" /> Authenticate & Publish</>
-                                             )}
+                                              <div className="p-4 bg-university-accent rounded-2xl text-white group-hover:scale-110 transition-transform">
+                                                  <Download className="h-8 w-8" />
+                                              </div>
+                                              <div>
+                                                  <p className="font-bold text-lg text-university-900 dark:text-white">Download PDF</p>
+                                                  <p className="text-xs text-university-600 dark:text-university-400 font-bold uppercase tracking-widest">Review file locally</p>
+                                              </div>
                                           </button>
-                                          <button 
-                                             onClick={() => handleEmailAction(activeSub.id, 'reject')}
-                                             disabled={!!isProcessing}
-                                             className="flex-1 border-2 border-red-500/20 text-red-500 hover:bg-red-500/10 py-5 rounded-[1.5rem] font-bold flex items-center justify-center gap-3 transition-all"
-                                          >
-                                             <X className="h-5 w-5" /> Decline Entry
-                                          </button>
+                                          
+                                          <div className="flex items-center gap-6 p-6 border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-slate-800/50 rounded-3xl text-left">
+                                              <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm">
+                                                  <FileText className="h-8 w-8 text-gray-400" />
+                                              </div>
+                                              <div>
+                                                  <p className="font-bold text-lg text-slate-900 dark:text-white">Metadata</p>
+                                                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{activeSub.pattern || 'Pattern Unknown'}</p>
+                                              </div>
+                                          </div>
                                        </div>
+                                       
+                                       {activeSub.status === 'pending' ? (
+                                          <div className="flex gap-6">
+                                             <button 
+                                                onClick={() => handleSubmissionAction(activeSub.id, 'approve')}
+                                                disabled={!!isProcessing}
+                                                className="flex-[2] bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-5 rounded-[1.5rem] font-bold flex flex-col items-center justify-center transition-all shadow-2xl shadow-green-500/20"
+                                             >
+                                                <div className="flex items-center gap-3 mb-1"><CheckCircle className="h-5 w-5" /> Approve & Reward</div>
+                                                <span className="text-[10px] uppercase font-bold tracking-widest opacity-80">+5 Credits to Student Account</span>
+                                             </button>
+                                             <button 
+                                                onClick={() => handleSubmissionAction(activeSub.id, 'reject')}
+                                                disabled={!!isProcessing}
+                                                className="flex-1 border-2 border-red-500/20 text-red-500 hover:bg-red-500/10 py-5 rounded-[1.5rem] font-bold flex items-center justify-center gap-3 transition-all"
+                                             >
+                                                <XCircle className="h-5 w-5" /> Decline
+                                             </button>
+                                          </div>
+                                       ) : (
+                                          <div className="bg-university-accent/10 border-2 border-dashed border-university-accent/30 p-10 rounded-[2.5rem] text-center">
+                                              <Stamp className="h-12 w-12 text-university-accent mx-auto mb-4" />
+                                              <h3 className="text-xl font-bold text-university-900 dark:text-white mb-2">Already Verified</h3>
+                                              <p className="text-gray-600 dark:text-gray-400 mb-6 max-sm mx-auto">
+                                                 This file has been approved and credited. To publish it publicly, use the Manual Upload tool with the data below.
+                                              </p>
+                                              <button 
+                                                 onClick={() => {
+                                                    setUploadSubject(activeSub.subjectId);
+                                                    setUploadSemester(activeSub.semester.toString());
+                                                    setUploadType(activeSub.type);
+                                                    setUploadPattern(activeSub.pattern || '');
+                                                    setUploadDegree(activeSub.degreeLevel || '');
+                                                    setUploadCollege(activeSub.collegeId || '');
+                                                    setUploadTitle(activeSub.fileName.replace('.pdf', ''));
+                                                    setIsUploadModalOpen(true);
+                                                 }}
+                                                 className="bg-university-900 dark:bg-university-accent text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-all"
+                                              >
+                                                 Populate Manual Upload
+                                              </button>
+                                          </div>
+                                       )}
                                     </div>
                                  </div>
                               </div>
@@ -676,7 +995,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                      ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
                            <Inbox className="h-24 w-24 mb-6 opacity-10" />
-                           <p className="font-serif text-2xl font-bold opacity-30 uppercase tracking-widest">Select Entry</p>
+                           <p className="font-serif text-2xl font-bold opacity-30 uppercase tracking-widest">Select entry to moderate</p>
                         </div>
                      )}
                   </div>
@@ -692,7 +1011,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                        <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Live resources currently accessible by students</p>
                    </div>
                    <button 
-                     onClick={() => setIsUploadModalOpen(true)}
+                     onClick={() => { resetForm(); setIsUploadModalOpen(true); }}
                      className="w-full md:w-auto bg-university-accent hover:bg-amber-700 text-white font-bold py-4 px-8 rounded-2xl shadow-xl shadow-university-accent/20 flex items-center justify-center gap-3 transition-all active:scale-95"
                    >
                      <Plus className="h-6 w-6" /> Manual Upload
@@ -707,8 +1026,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                <th className="px-8 py-5">Title Descriptor</th>
                                <th className="px-8 py-5">Subject Area</th>
                                <th className="px-8 py-5">Resource Type</th>
-                               <th className="px-8 py-5 text-center">Impression Count</th>
-                               <th className="px-8 py-5 text-right">Moderation</th>
+                               <th className="px-8 py-5 text-center">Impressions</th>
+                               <th className="px-8 py-5 text-right">Action</th>
                             </tr>
                          </thead>
                          <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-slate-600 dark:text-slate-400">
@@ -721,7 +1040,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                             onClick={async () => {
                                                 const url = await db.getFileUrl(`res-${res.id}`);
                                                 if(url) window.open(url, '_blank');
-                                                else alert("File missing in DB");
+                                                else alert("File missing");
                                             }}
                                             className="flex items-center gap-3 hover:text-university-accent transition-colors text-left"
                                          >
@@ -736,7 +1055,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                             res.type === ResourceType.NOTE ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' :
                                             'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400'
                                          }`}>
-                                           {res.type === ResourceType.PYQ ? 'Exam Paper' : res.type === ResourceType.NOTE ? 'Lecture' : 'Course'}
+                                           {res.type === ResourceType.PYQ ? 'Paper' : res.type === ResourceType.NOTE ? 'Notes' : 'Syllabus'}
                                          </span>
                                       </td>
                                       <td className="px-8 py-5 text-center font-bold text-slate-900 dark:text-white">{res.downloadCount.toLocaleString()}</td>
@@ -758,22 +1077,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
              </div>
          )}
 
-         {/* Users View */}
          {activeView === 'users' && (
              <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
                  <div className="mb-12">
                     <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Student Base</h1>
                     <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Registered students and their contribution metrics</p>
                  </div>
-                 
                  <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-white/5 overflow-hidden">
                      <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold tracking-[0.2em] text-slate-400 border-b border-gray-100 dark:border-white/5">
                                 <tr>
-                                    <th className="px-8 py-5">Student Identity</th>
+                                    <th className="px-8 py-5">Student</th>
                                     <th className="px-8 py-5">Submissions</th>
-                                    <th className="px-8 py-5">Approved</th>
+                                    <th className="px-8 py-5">Verified</th>
                                     <th className="px-8 py-5">Last Activity</th>
                                     <th className="px-8 py-5 text-right">Trust Score</th>
                                 </tr>
@@ -799,9 +1116,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
                                         </td>
                                     </tr>
                                 ))}
-                                {uniqueUsers.length === 0 && (
-                                    <tr><td colSpan={5} className="p-20 text-center font-serif text-2xl text-slate-300">No students recorded yet</td></tr>
-                                )}
                             </tbody>
                         </table>
                      </div>
@@ -809,148 +1123,97 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
              </div>
          )}
          
-         {/* Activity View */}
          {activeView === 'activity' && (
              <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
                  <div className="mb-12">
-                    <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Student Login History</h1>
+                    <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">Security Logs</h1>
                     <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Audit trail of student authentications</p>
                  </div>
-                 
                  <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-white/5 overflow-hidden">
                      <table className="w-full text-left text-sm">
                          <thead className="bg-gray-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold tracking-[0.2em] text-slate-400 border-b border-gray-100 dark:border-white/5">
                              <tr>
-                                 <th className="px-8 py-5">User Identifier</th>
-                                 <th className="px-8 py-5">Platform Method</th>
+                                 <th className="px-8 py-5">User</th>
+                                 <th className="px-8 py-5">Method</th>
                                  <th className="px-8 py-5">Timestamp</th>
-                                 <th className="px-8 py-5 text-right">Verification</th>
+                                 <th className="px-8 py-5 text-right">Status</th>
                              </tr>
                          </thead>
                          <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-slate-600 dark:text-slate-400">
                              {loginRecords.sort((a,b) => b.timestamp - a.timestamp).map(record => (
                                  <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                                      <td className="px-8 py-5 font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                                         <div className="h-10 w-10 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-university-accent">
-                                             <UserIcon className="h-5 w-5" />
-                                         </div>
                                          {record.identifier}
                                      </td>
-                                     <td className="px-8 py-5">
-                                         <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5">
-                                             {record.method === 'email' ? <Mail className="h-3 w-3" /> : <Smartphone className="h-3 w-3" />}
-                                             {record.method === 'email' ? 'Email Login' : 'Mobile Login'}
-                                         </span>
+                                     <td className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                         {record.method}
                                      </td>
                                      <td className="px-8 py-5 font-medium">
-                                         {new Date(record.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                         {new Date(record.timestamp).toLocaleString()}
                                      </td>
                                      <td className="px-8 py-5 text-right">
-                                         <span className="text-green-600 dark:text-green-400 text-[10px] font-bold uppercase tracking-widest flex items-center justify-end gap-2">
-                                             <CheckCircle className="h-4 w-4" /> Authenticated
+                                         <span className="text-green-600 dark:text-green-400 text-[10px] font-bold uppercase tracking-widest">
+                                             Success
                                          </span>
                                      </td>
                                  </tr>
                              ))}
-                             {loginRecords.length === 0 && (
-                                 <tr><td colSpan={4} className="p-20 text-center font-serif text-2xl text-slate-300">No login activity recorded</td></tr>
-                             )}
                          </tbody>
                      </table>
                  </div>
              </div>
          )}
 
-         {/* Settings View */}
          {activeView === 'settings' && (
             <div className="animate-in fade-in slide-in-from-bottom-6 duration-700 max-w-2xl">
                <div className="mb-12">
                    <h1 className="text-4xl font-serif font-bold text-slate-900 dark:text-white">System Config</h1>
-                   <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Manage administrator credentials and security</p>
+                   <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Manage administrator security</p>
                </div>
                
                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-white/5 p-10">
-                  <div className="flex items-center gap-4 mb-8">
-                     <div className="h-12 w-12 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-university-accent">
-                        <Key className="h-6 w-6" />
-                     </div>
-                     <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">Change Admin Password</h3>
-                  </div>
-
                   <form onSubmit={handleChangePassword} className="space-y-6">
                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Current Password</label>
-                        <div className="relative">
-                           <input 
-                              type="password"
-                              value={currentPwd}
-                              onChange={(e) => setCurrentPwd(e.target.value)}
-                              className="w-full p-4 pl-12 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
-                              placeholder="Enter current password"
-                           />
-                           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        </div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Current Passcode</label>
+                        <input 
+                           type="password"
+                           value={currentPwd}
+                           onChange={(e) => setCurrentPwd(e.target.value)}
+                           className="w-full p-4 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
+                        />
                      </div>
-
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                           <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">New Password</label>
-                           <div className="relative">
-                              <input 
-                                 type="password"
-                                 value={newPwd}
-                                 onChange={(e) => setNewPwd(e.target.value)}
-                                 className="w-full p-4 pl-12 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
-                                 placeholder="At least 4 chars"
-                              />
-                              <Key className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                           </div>
+                           <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">New Passcode</label>
+                           <input 
+                              type="password"
+                              value={newPwd}
+                              onChange={(e) => setNewPwd(e.target.value)}
+                              className="w-full p-4 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
+                           />
                         </div>
                         <div>
-                           <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Confirm Password</label>
-                           <div className="relative">
-                              <input 
-                                 type="password"
-                                 value={confirmPwd}
-                                 onChange={(e) => setConfirmPwd(e.target.value)}
-                                 className="w-full p-4 pl-12 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
-                                 placeholder="Repeat new password"
-                              />
-                              <ShieldAlert className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                           </div>
+                           <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Confirm New Passcode</label>
+                           <input 
+                              type="password"
+                              value={confirmPwd}
+                              onChange={(e) => setConfirmPwd(e.target.value)}
+                              className="w-full p-4 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-university-accent rounded-xl focus:outline-none transition-all dark:text-white"
+                           />
                         </div>
                      </div>
-
                      {settingsMsg && (
-                        <div className={`p-4 rounded-xl flex items-center gap-3 border text-xs font-bold ${
-                           settingsMsg.type === 'success' 
-                           ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30' 
-                           : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/30'
-                        }`}>
-                           {settingsMsg.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                        <div className={`p-4 rounded-xl text-xs font-bold ${settingsMsg.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                            {settingsMsg.text}
                         </div>
                      )}
-
                      <button 
                         type="submit"
-                        className="w-full bg-university-900 hover:bg-black text-white font-bold py-4 rounded-xl shadow-xl transition-all flex items-center justify-center gap-3"
+                        className="w-full bg-university-900 hover:bg-black text-white font-bold py-4 rounded-xl shadow-xl transition-all"
                      >
-                        <Save className="h-5 w-5" /> Update Administrator Credentials
+                        Update Security Credentials
                      </button>
                   </form>
-
-                  <div className="mt-8 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-white/5">
-                     <div className="flex items-start gap-4">
-                        <AlertCircle className="h-5 w-5 text-slate-400 mt-0.5" />
-                        <div>
-                           <p className="text-sm font-bold text-slate-900 dark:text-white mb-1">Security Recommendation</p>
-                           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                              Use a unique password for the administrator portal. Changes take effect immediately. If you forget your password, contact system engineering.
-                           </p>
-                        </div>
-                     </div>
-                  </div>
                </div>
             </div>
          )}
@@ -958,6 +1221,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, resources,
     </div>
   );
 };
+
+const HealthPill = ({ label, status, type }: { label: string, status: boolean, type: 'bucket' | 'table' }) => (
+    <div className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${status ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30'}`}>
+        <div className="flex items-center gap-3">
+            {type === 'bucket' ? <HardDrive className={`h-4 w-4 ${status ? 'text-green-600' : 'text-red-600'}`} /> : <Database className={`h-4 w-4 ${status ? 'text-green-600' : 'text-red-600'}`} />}
+            <span className={`text-[10px] font-black uppercase tracking-widest ${status ? 'text-green-800 dark:text-green-400' : 'text-red-800 dark:text-red-400'}`}>{label}</span>
+        </div>
+        {status ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}
+    </div>
+);
 
 const SidebarItem = ({ icon, label, active, onClick, badge }: { icon: any, label: string, active: boolean, onClick: () => void, badge?: number }) => (
    <button 
@@ -969,7 +1242,7 @@ const SidebarItem = ({ icon, label, active, onClick, badge }: { icon: any, label
          <span className="font-bold text-sm tracking-tight">{label}</span>
       </div>
       {badge ? (
-         <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] h-6 flex items-center justify-center shadow-lg">{badge}</span>
+         <span className="bg-university-accent text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] h-6 flex items-center justify-center shadow-lg border border-white/20">{badge}</span>
       ) : null}
    </button>
 );

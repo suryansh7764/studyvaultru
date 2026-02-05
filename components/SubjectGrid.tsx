@@ -181,7 +181,8 @@ const SubjectGrid: React.FC<SubjectGridProps> = ({ subjects, allResources, onSel
                         onClick={() => scrollToFaculty(faculty.id)}
                         className={`px-4 py-2 rounded-xl border text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-2 ${faculty.textColor} border-gray-200 dark:border-slate-800 hover:border-university-accent bg-white dark:bg-slate-900 shadow-sm hover:scale-105 active:scale-95`}
                       >
-                         {React.cloneElement(faculty.icon as React.ReactElement, { className: 'h-3.5 w-3.5' })}
+                         {/* Fix: cast faculty.icon to React.ReactElement<any> to avoid className type error */}
+                         {React.cloneElement(faculty.icon as React.ReactElement<any>, { className: 'h-3.5 w-3.5' })}
                          {faculty.label.split(' ')[0]}
                       </button>
                   ))}

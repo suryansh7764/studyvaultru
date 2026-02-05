@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
   <head>
@@ -14,8 +15,9 @@
       window.process = window.process || { env: {} };
       window.process.env = {
         API_KEY: window.process.env.API_KEY || '',
-        SUPABASE_URL: window.process.env.SUPABASE_URL || 'https://nxaterttiubxthvzwjwx.supabase.co',
-        SUPABASE_KEY: window.process.env.SUPABASE_KEY || 'sb_publishable_tJ03vjLNbP1re1fTFGE-6g_MyI0JjOq',
+        // UPDATED WITH YOUR PROVIDED SUPABASE CREDENTIALS
+        SUPABASE_URL: window.process.env.SUPABASE_URL || 'https://sjptcgmjokirbgeuehhm.supabase.co',
+        SUPABASE_KEY: window.process.env.SUPABASE_KEY || 'sb_publishable_92_Sk36mczhLc5rTKlT4jA_9alIJCMf',
         ...window.process.env
       };
       
@@ -125,7 +127,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Removed text/babel and using native module loading -->
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
